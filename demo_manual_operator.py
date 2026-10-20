@@ -30,7 +30,7 @@ from scenario import (
 )
 
 
-FLEET_SIZE = 15
+FLEET_SIZE = 6
 SCENARIO_SEED = 43
 DT = 10
 MAX_STEPS = 1000

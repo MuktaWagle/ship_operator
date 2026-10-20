@@ -99,6 +99,8 @@ Last-step minima assume linear motion between step endpoints. They are retrospec
 | `raw_data/synthetic_ais_data.csv` | Source data |
 | `star-icon.jpg` | Asset retained for the underlying environment renderer |
 | `operator_tracker.py` | Operator status (Available/Preparing/Assisting), budget tracker, action masking |
+| `allocation_env.py` | Gymnasium state-action-reward environment for learning operator allocation |
+| `test_allocation_env.py` | Checks for allocation observations, action masks and event rewards |
 | `demo_operator_budget.py` | Pygame interface with live operator HUD and budget tracker |
 | `run_simulation_test.py` | Headless terminal simulation test of fleet and operator budget |
 | `test_operator_tracker.py` | Unit and integration tests for operator & budget tracker |
@@ -176,6 +178,58 @@ Transition lifecycle:
 5. If the assisted vessel arrives/retires early $\to$ operator is immediately freed.
 
 ## Checks & Testing
+
+### Allocation state-action-reward environment
+
+`FleetAllocationEnv` wraps `FleetSimulator`, `RouteController` and
+`OperatorBudgetTracker` as a Gymnasium environment. It uses one proactive
+allocation decision per fleet simulation step (`dt`, currently 10 simulated
+seconds):
+
+```python
+from allocation_env import FleetAllocationEnv
+
+env = FleetAllocationEnv(fleet, controller, tracker)
+observation, info = env.reset(seed=43)
+
+while True:
+    # 0 = idle; 1..N = assign the corresponding vessel.
+    valid_actions = info["action_mask"]
+    action = 0
+    observation, reward, terminated, truncated, info = env.step(action)
+    if terminated or truncated:
+        break
+
+env.close()
+```
+
+The observation keeps a fixed shape for the whole episode. Retired vessels
+remain in the vessel tensor with `active=0`. Ship features contain normalized
+position, speed, heading (`sin`/`cos`), timestamp, active flag and assigned
+flag. The operator vector contains budget, one-hot operator status,
+preparation time, remaining assistance time, elapsed assistance time and
+simulation time. `info["action_mask"]` identifies valid discrete actions.
+
+Rewards use event deltas for the current step:
+
+```text
+reward = wg * newly_completed_journeys
+       - wc * newly_started_collisions
+       - wm * newly_started_near_misses
+       - wh * accepted_interventions
+```
+
+The default collision threshold is 50 m and the default near-miss threshold
+is 500 m. These are configuration values, not physical safety definitions.
+The allocation environment currently uses a configurable fixed assistance
+maneuver (`right` by default); replacing that maneuver with a learned
+assistance controller is a separate phase.
+
+Run its checks with:
+
+```bash
+python test_allocation_env.py
+```
 
 1. **Unit & Integration Tests**:
 ```bash
