@@ -1,0 +1,360 @@
+{
+  "schema_version": 1,
+  "seed": 42,
+  "csv_sha256": "68ed6cfedc3c34009140b1db8697c41a165e7da62001ba39dbdaf00b0cf9cb3f",
+  "source_ships": {
+    "train": [
+      829,
+      3483,
+      5340,
+      5339,
+      5086,
+      827,
+      5344,
+      5341,
+      832,
+      5087,
+      5088,
+      831,
+      828,
+      5089,
+      552,
+      549,
+      3482,
+      3484,
+      5338
+    ],
+    "val": [
+      3479,
+      833,
+      3481,
+      5343,
+      551
+    ],
+    "test": [
+      553,
+      5342,
+      550,
+      3480,
+      830
+    ]
+  },
+  "journeys": [
+    {
+      "journey_id": 0,
+      "ship_id": 549,
+      "split": "train",
+      "records": 160,
+      "goal_xy": [
+        5649.264648362593,
+        7708.961425781218
+      ]
+    },
+    {
+      "journey_id": 1,
+      "ship_id": 550,
+      "split": "test",
+      "records": 35,
+      "goal_xy": [
+        1205.7644042957947,
+        4304.481933593738
+      ]
+    },
+    {
+      "journey_id": 2,
+      "ship_id": 551,
+      "split": "val",
+      "records": 75,
+      "goal_xy": [
+        903.5941162091,
+        4041.879882812486
+      ]
+    },
+    {
+      "journey_id": 3,
+      "ship_id": 552,
+      "split": "train",
+      "records": 77,
+      "goal_xy": [
+        850.5119018546941,
+        4423.236816406233
+      ]
+    },
+    {
+      "journey_id": 4,
+      "ship_id": 553,
+      "split": "test",
+      "records": 133,
+      "goal_xy": [
+        6622.142089724391,
+        4583.219726562492
+      ]
+    },
+    {
+      "journey_id": 5,
+      "ship_id": 827,
+      "split": "train",
+      "records": 42,
+      "goal_xy": [
+        490.4352722162494,
+        6509.771484374985
+      ]
+    },
+    {
+      "journey_id": 6,
+      "ship_id": 828,
+      "split": "train",
+      "records": 43,
+      "goal_xy": [
+        1006.1603393565188,
+        4146.99365234374
+      ]
+    },
+    {
+      "journey_id": 7,
+      "ship_id": 829,
+      "split": "train",
+      "records": 44,
+      "goal_xy": [
+        553.5081176752873,
+        6942.5546874999745
+      ]
+    },
+    {
+      "journey_id": 8,
+      "ship_id": 830,
+      "split": "test",
+      "records": 126,
+      "goal_xy": [
+        501.3438720702828,
+        4297.293945312509
+      ]
+    },
+    {
+      "journey_id": 9,
+      "ship_id": 831,
+      "split": "train",
+      "records": 59,
+      "goal_xy": [
+        6432.746093638002,
+        4499.849609374976
+      ]
+    },
+    {
+      "journey_id": 10,
+      "ship_id": 832,
+      "split": "train",
+      "records": 121,
+      "goal_xy": [
+        778.8470458990206,
+        3856.423095703113
+      ]
+    },
+    {
+      "journey_id": 11,
+      "ship_id": 833,
+      "split": "val",
+      "records": 119,
+      "goal_xy": [
+        6659.204589720993,
+        5447.3432617187445
+      ]
+    },
+    {
+      "journey_id": 12,
+      "ship_id": 3479,
+      "split": "val",
+      "records": 32,
+      "goal_xy": [
+        6493.7622069195595,
+        5708.47314453124
+      ]
+    },
+    {
+      "journey_id": 13,
+      "ship_id": 3480,
+      "split": "test",
+      "records": 55,
+      "goal_xy": [
+        5936.044921788662,
+        4867.188476562489
+      ]
+    },
+    {
+      "journey_id": 14,
+      "ship_id": 3481,
+      "split": "val",
+      "records": 208,
+      "goal_xy": [
+        0.12500000014564108,
+        6630.491699218757
+      ]
+    },
+    {
+      "journey_id": 15,
+      "ship_id": 3482,
+      "split": "train",
+      "records": 73,
+      "goal_xy": [
+        5503.188476495076,
+        5778.267578124987
+      ]
+    },
+    {
+      "journey_id": 16,
+      "ship_id": 3483,
+      "split": "train",
+      "records": 116,
+      "goal_xy": [
+        846.8317871094488,
+        3876.0065917968645
+      ]
+    },
+    {
+      "journey_id": 17,
+      "ship_id": 3484,
+      "split": "train",
+      "records": 112,
+      "goal_xy": [
+        530.379821779332,
+        6843.057128906226
+      ]
+    },
+    {
+      "journey_id": 18,
+      "ship_id": 5086,
+      "split": "train",
+      "records": 106,
+      "goal_xy": [
+        5263.29345696914,
+        7777.008789062479
+      ]
+    },
+    {
+      "journey_id": 19,
+      "ship_id": 5087,
+      "split": "train",
+      "records": 41,
+      "goal_xy": [
+        343.5839538593772,
+        6750.668945312503
+      ]
+    },
+    {
+      "journey_id": 20,
+      "ship_id": 5088,
+      "split": "train",
+      "records": 82,
+      "goal_xy": [
+        6442.022949108105,
+        4546.003906249984
+      ]
+    },
+    {
+      "journey_id": 21,
+      "ship_id": 5089,
+      "split": "train",
+      "records": 211,
+      "goal_xy": [
+        4945.824218700503,
+        7506.016601562506
+      ]
+    },
+    {
+      "journey_id": 22,
+      "ship_id": 5338,
+      "split": "train",
+      "records": 36,
+      "goal_xy": [
+        5640.169433517163,
+        7525.129882812487
+      ]
+    },
+    {
+      "journey_id": 23,
+      "ship_id": 5339,
+      "split": "train",
+      "records": 89,
+      "goal_xy": [
+        565.7435913085955,
+        4244.311035156245
+      ]
+    },
+    {
+      "journey_id": 24,
+      "ship_id": 5340,
+      "split": "train",
+      "records": 25,
+      "goal_xy": [
+        6179.300292871503,
+        4648.179687499982
+      ]
+    },
+    {
+      "journey_id": 25,
+      "ship_id": 5341,
+      "split": "train",
+      "records": 36,
+      "goal_xy": [
+        208.49203491261017,
+        6711.156738281224
+      ]
+    },
+    {
+      "journey_id": 26,
+      "ship_id": 5342,
+      "split": "test",
+      "records": 82,
+      "goal_xy": [
+        1029.2441406246598,
+        4058.1318359374927
+      ]
+    },
+    {
+      "journey_id": 27,
+      "ship_id": 5343,
+      "split": "val",
+      "records": 133,
+      "goal_xy": [
+        6649.17480456485,
+        5097.401367187506
+      ]
+    },
+    {
+      "journey_id": 28,
+      "ship_id": 5344,
+      "split": "train",
+      "records": 168,
+      "goal_xy": [
+        5288.25439446863,
+        7576.801757812496
+      ]
+    }
+  ],
+  "feature_names": [
+    "x/map_width",
+    "y/map_height",
+    "cos_heading",
+    "sin_heading",
+    "speed/10",
+    "goal_dx/map_width",
+    "goal_dy/map_height"
+  ],
+  "target_names": [
+    "turn_radians/max_turn",
+    "next_speed_ms/max_speed"
+  ],
+  "source_columns": [
+    "journey_id",
+    "row_in_journey",
+    "ship_id"
+  ],
+  "dt": 10.0,
+  "max_speed_ms": 10.0,
+  "max_turn_radians": 0.5235987755982988,
+  "arrival_radius_m": 200.0,
+  "map_width_m": 6670.351775572024,
+  "map_height_m": 7783.644865119113,
+  "heading_convention": "previous-interval course; radians counterclockwise from east",
+  "normalization": "fixed physical scales; no validation/test fitting"
+}

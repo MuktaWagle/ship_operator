@@ -101,11 +101,13 @@ Last-step minima assume linear motion between step endpoints. They are retrospec
 | `operator_tracker.py` | Operator status (Available/Preparing/Assisting), budget tracker, action masking |
 | `allocation_env.py` | Gymnasium state-action-reward environment for learning operator allocation |
 | `test_allocation_env.py` | Checks for allocation observations, action masks and event rewards |
+| `bc_navigation/` | Inference-only learned navigation controller, scenario loader and frozen model/data |
+| `run_bc_allocation_test.py` | Headless BC-navigation plus operator-allocation integration check |
 | `demo_operator_budget.py` | Pygame interface with live operator HUD and budget tracker |
 | `run_simulation_test.py` | Headless terminal simulation test of fleet and operator budget |
 | `test_operator_tracker.py` | Unit and integration tests for operator & budget tracker |
 | `test_fleet_reset.py`, `test_fleet_endings.py` | Existing simulator checks |
-| `requirements.txt`, `environment.yml` | Installation dependencies |
+| `requirements.txt`, `requirements-bc.txt`, `environment.yml` | Installation dependencies |
 | `LICENSE` | Original project licence, retained unchanged |
 
 ## Simulator interface for teammates
@@ -181,7 +183,7 @@ Transition lifecycle:
 
 ### Allocation state-action-reward environment
 
-`FleetAllocationEnv` wraps `FleetSimulator`, `RouteController` and
+`FleetAllocationEnv` wraps `FleetSimulator`, a navigation controller and
 `OperatorBudgetTracker` as a Gymnasium environment. It uses one proactive
 allocation decision per fleet simulation step (`dt`, currently 10 simulated
 seconds):
@@ -230,6 +232,27 @@ Run its checks with:
 ```bash
 python test_allocation_env.py
 ```
+
+### BC navigation integration
+
+The `bc_navigation` package uses the frozen behavioural-cloning checkpoint
+from ShipNaviSim 2 for autonomous navigation while retaining this project's
+`FleetSimulator`, `OperatorBudgetTracker` and allocation environment. The BC
+policy predicts turn and speed from each ship's current state and final goal;
+it does not follow stored waypoints. Stored BC journeys provide initialization
+and goals.
+
+Install the optional PyTorch dependency before running the integration check:
+
+```bash
+python -m pip install -r requirements-bc.txt
+python run_bc_allocation_test.py
+```
+
+The integration test uses the prepared training split, runs BC navigation for
+three vessels, dispatches one operator allocation at step 2, and then reports
+the operator budget and rewards. Use the training split for development; keep
+the prepared validation and test splits untouched for evaluation.
 
 1. **Unit & Integration Tests**:
 ```bash
