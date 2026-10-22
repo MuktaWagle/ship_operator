@@ -7,9 +7,9 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from allocation_env import FleetAllocationEnv, RewardWeights
-from fleet_simulator import FleetSimulator
-from operator_tracker import OperatorBudgetTracker, OperatorStatus
+from src.allocation_env import FleetAllocationEnv, RewardWeights
+from src.fleet_simulator import FleetSimulator
+from src.operator_tracker import OperatorBudgetTracker, OperatorStatus
 from test.support import HoldController
 
 

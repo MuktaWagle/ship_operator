@@ -1,6 +1,6 @@
 # ShipNaviSim — BC Navigation and Fleet Operator Demo
 
-A shared-world vessel simulation for behavioural-cloning (BC) navigation and manual operator intervention. Autonomous motion uses the frozen BC policy from ShipNaviSim 2; the operator can temporarily take over one ship while monitoring fleet separation.
+A shared-world vessel simulation with behavioural-cloning (BC) navigation and manual operator intervention. Autonomous motion uses the frozen BC policy from ShipNaviSim; the operator can temporarily take over one ship while monitoring fleet separation.
 
 ## Setup and run (Windows / Conda)
 
@@ -9,8 +9,7 @@ Open a terminal in this folder. For your existing environment:
 ```bat
 conda activate maritime-rl
 python -m pip install -r requirements.txt
-python -m pip install -r requirements-bc.txt
-python demo_manual_operator.py
+python demo/demo_manual_operator.py
 ```
 
 For a new environment:
@@ -18,11 +17,10 @@ For a new environment:
 ```bat
 conda env create -f environment.yml
 conda activate maritime-rl
-python -m pip install -r requirements-bc.txt
-python demo_manual_operator.py
+python demo/demo_manual_operator.py
 ```
 
-Python 3.10 is the reference version. The dependency files contain only the libraries required for this demo. The optional legacy `create_minari_dataset()` helper in `ship_env.py` requires a separate Minari installation; dataset export is outside this demo's scope.
+Python 3.10 is the reference version. The dependency files contain only the libraries required for this demo. The optional legacy `create_minari_dataset()` helper in `src/ship_env.py` requires a separate Minari installation; dataset export is outside this demo's scope.
 
 ## Controls
 
@@ -46,7 +44,7 @@ Stop is an immediate hold in this simplified model. Releasing the ship returns i
 
 ## Current settings
 
-Edit the constants near the top of `demo_manual_operator.py`.
+Edit the constants near the top of `demo/demo_manual_operator.py`.
 
 | Setting | Current value | Meaning |
 |---|---:|---|
@@ -91,17 +89,18 @@ Last-step minima assume linear motion between step endpoints. They are retrospec
 
 | File | Purpose |
 |---|---|
-| `demo_manual_operator.py` | Main Pygame interface, BC navigation, manual commands and live alerts |
-| `demo_operator_budget.py` | Pygame interface with live operator HUD, budget tracker and BC navigation |
+| `demo/demo_manual_operator.py` | Main Pygame interface, BC navigation, manual commands and live alerts |
+| `demo/demo_operator_budget.py` | Pygame interface with live operator HUD, budget tracker and BC navigation |
 | `bc_navigation/` | Inference-only BC controller, scenario loader, frozen model and prepared data |
-| `fleet_simulator.py` | Shared clock/state, movement, retirement and pair distances |
-| `ship_env.py` | Underlying vessel environment and coordinate conversion |
+| `src/fleet_simulator.py` | Shared clock/state, movement, retirement and pair distances |
+| `src/ship_env.py` | Underlying vessel environment and coordinate conversion |
 | `utils.py` | Supporting coordinate and angle calculations |
 | `star-icon.jpg` | Asset retained for the underlying environment renderer |
-| `operator_tracker.py` | Operator status (Available/Preparing/Assisting), budget tracker, action masking |
-| `allocation_env.py` | Gymnasium state-action-reward environment for learning operator allocation |
+| `src/operator_tracker.py` | Operator status (Available/Preparing/Assisting), budget tracker, action masking |
+| `src/allocation_env.py` | Gymnasium state-action-reward environment for learning operator allocation |
 | `test/` | Allocation, operator, fleet-regression and BC integration checks |
-| `requirements.txt`, `requirements-bc.txt`, `environment.yml` | Installation dependencies |
+| `CODE_FLOW.md` | Low-level component and simulation-step flow diagrams |
+| `requirements.txt`, `environment.yml` | Installation dependencies |
 | `LICENSE` | Original project licence, retained unchanged |
 
 ## Simulator interface for teammates
@@ -134,7 +133,7 @@ The BC policy predicts a bounded turn and speed from the vessel's current positi
 `OperatorBudgetTracker` tracks operator availability, communication delays ($\delta$), intervention duration ($\tau$), and assistance budget ($B$).
 
 ```python
-from operator_tracker import OperatorBudgetTracker, OperatorStatus
+from src.operator_tracker import OperatorBudgetTracker, OperatorStatus
 
 tracker = OperatorBudgetTracker(
     vessel_ids=fleet.vessel_ids,
@@ -185,7 +184,7 @@ allocation decision per fleet simulation step (`dt`, currently 10 simulated
 seconds):
 
 ```python
-from allocation_env import FleetAllocationEnv
+from src.allocation_env import FleetAllocationEnv
 
 env = FleetAllocationEnv(fleet, controller, tracker)
 observation, info = env.reset(seed=43)
@@ -232,16 +231,16 @@ python -m test.test_allocation_env
 ### BC navigation integration
 
 The `bc_navigation` package uses the frozen behavioural-cloning checkpoint
-from ShipNaviSim 2 for autonomous navigation while retaining this project's
+from ShipNaviSim for autonomous navigation while retaining this project's
 `FleetSimulator`, `OperatorBudgetTracker` and allocation environment. The BC
 policy predicts turn and speed from each ship's current state and final goal;
 it does not follow stored waypoints. Stored BC journeys provide initialization
 and goals.
 
-Install the optional PyTorch dependency before running the integration check:
+PyTorch is included in `requirements.txt`, so no additional dependency file is
+needed before running the integration check:
 
 ```bash
-python -m pip install -r requirements-bc.txt
 python -m test.run_bc_allocation_test
 ```
 
@@ -264,11 +263,14 @@ python -m test.test_fleet_endings
 3. **Pygame Visual Simulator Demo**:
 Launches the fleet simulator with the live Operator State & Budget HUD (status badges, live budget progress bar, manual or greedy auto-dispatch):
 ```bash
-python demo_operator_budget.py
+python demo/demo_operator_budget.py
 ```
 
 ## Scope and cleanup
 
-The maintained entry points are `demo_manual_operator.py` and `demo_operator_budget.py`. Fixed-route navigation, its source CSV/preprocessing modules, and its standalone headless runner were removed. The final project uses the frozen BC package for autonomous navigation and keeps all checks under `test/`.
+The maintained entry points are `demo/demo_manual_operator.py` and `demo/demo_operator_budget.py`. Fixed-route navigation, its source CSV/preprocessing modules, and its standalone headless runner were removed. The final project uses the frozen BC package for autonomous navigation and keeps all checks under `test/`.
 
-Core simulator behaviour and your selected settings are retained. Minari is imported only when its optional export helper is called. Further work includes selectable turn angles (deferred), deliberate encounter layouts, timestamped intervention logs, trained allocation policies, and a fleet training wrapper.
+Minari is imported only when its optional export helper is called. Further work includes:
+- Learned operator maneuver
+- Intervention logs (observability)
+- Trained allocation policy

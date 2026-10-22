@@ -5,7 +5,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from fleet_simulator import FleetSimulator
+from src.fleet_simulator import FleetSimulator
 
 
 REGION = {

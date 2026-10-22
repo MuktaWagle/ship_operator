@@ -23,8 +23,8 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from fleet_simulator import FleetSimulator
-from operator_tracker import OperatorBudgetTracker
+from .fleet_simulator import FleetSimulator
+from .operator_tracker import OperatorBudgetTracker
 
 
 @dataclass(frozen=True)
