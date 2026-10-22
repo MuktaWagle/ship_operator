@@ -1,6 +1,11 @@
+import sys
+from pathlib import Path
+
 import numpy as np
 
-from fleet_simulator import FleetSimulator
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from src.fleet_simulator import FleetSimulator
 
 
 region = {

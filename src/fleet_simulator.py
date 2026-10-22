@@ -1,6 +1,6 @@
 import numpy as np
 
-from ship_env import ShipEnvironment
+from .ship_env import ShipEnvironment
 
 def closest_distance_during_step(a_start, a_end, b_start, b_end):
     """Minimum centre separation during straight movement within a step."""

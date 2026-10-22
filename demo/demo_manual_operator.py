@@ -1,46 +1,51 @@
-"""Operator State and Budget Tracker demo.
-
-Visual demonstration of Task 2 integrated with the full ShipNaviSim fleet.
-Keeps ship visuals, polygon hulls, colors, and vessel speeds identical to demo_manual_operator.py.
+"""
+Manual operator demo.
 
 Controls:
-    TAB / Click Row : Select an active ship
-    LEFT / A        : Turn selected ship left (via operator dispatch)
-    RIGHT / D       : Turn selected ship right (via operator dispatch)
-    S               : Stop and hold selected ship (via operator dispatch)
-    R               : Early release from operator control
-    G               : Toggle Greedy Auto-Intervention Dispatcher
-    UP / DOWN       : Change intervention duration (tau) in 10-second steps
-    SPACE           : Pause / resume simulation
-    ESC             : Exit
+    TAB          Select the next active ship
+    Click row    Select a ship from the right-hand panel
+    LEFT / A     Turn the selected ship left
+    RIGHT / D    Turn the selected ship right
+    S            Stop and hold the selected ship
+    R            Release control and resume BC navigation
+    UP / DOWN    Increase / decrease command duration
+    SPACE        Pause / resume
+    ESC          Exit
+
+Only one ship can be under manual operator control at a time.
+A ship running BC navigation does not occupy the operator.
+
+This demo uses the frozen behavioural-cloning navigator and FleetSimulator.
+It does not implement collision avoidance or intervention decisions.
 """
 
-import sys
 import numpy as np
 import pygame
+import sys
+from pathlib import Path
 
-from fleet_simulator import FleetSimulator
-from route_controller import RouteController
-from operator_tracker import OperatorBudgetTracker, OperatorStatus
-from scenario import load_source_trajectories, build_fleet_scenario
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.fleet_simulator import FleetSimulator
+from bc_navigation import BCController, FrozenBCPolicy, load_bc_scenario
 
 
-FLEET_SIZE = 15
+FLEET_SIZE = 6
 SCENARIO_SEED = 43
 DT = 10
 MAX_STEPS = 1000
 WARNING_DISTANCE_M = 500.0
 MIN_START_DISTANCE_M = 100.0
 
+# One simulation step represents 10 simulated seconds.
+# Display speed is independent of the simulation step duration.
 STEPS_PER_REAL_SECOND = 3
 
 TURN_RATE_DEG = 1.0
-INITIAL_COMMAND_DURATION = 60
+INITIAL_COMMAND_DURATION = 100
 MAX_COMMAND_DURATION = 240
-
-# Operator & Budget settings
-TOTAL_BUDGET = 300.0         # Total assistance budget B in simulated seconds
-COMMUNICATION_DELAY = 10.0   # Buffer delay delta in simulated seconds
 
 REGION_OF_INTEREST = {
     "LON": (103.82, 103.88),
@@ -65,6 +70,13 @@ def ship_colour(index, count):
     )
     return colour.r, colour.g, colour.b
 
+
+def current_operator_ship(fleet, controller):
+    """Find the active vessel currently using the operator."""
+    for ship_id in fleet.active_ship_ids:
+        if controller.mode[ship_id] == "operator":
+            return ship_id
+    return None
 
 def calculate_live_distances(state):
     """Calculate current distances between active ships only."""
@@ -107,7 +119,9 @@ def calculate_live_distances(state):
     return pairs, nearest
 
 
-def report_distance_alerts(fleet, state, previous_warning_pairs):
+def report_distance_alerts(
+    fleet, state, previous_warning_pairs
+):
     """Print warning transitions once per simulation step."""
     pairs, _ = calculate_live_distances(state)
 
@@ -141,6 +155,9 @@ def report_distance_alerts(fleet, state, previous_warning_pairs):
                 "two active ships."
             )
 
+    # Detect an encounter between displayed positions.
+    # Avoid repeating a warning for pairs already below the threshold
+    # at either endpoint.
     last_step = fleet.get_distance_metrics()["last_step"]
 
     for pair, result in sorted(last_step.items()):
@@ -157,18 +174,14 @@ def report_distance_alerts(fleet, state, previous_warning_pairs):
             )
 
     return warning_pairs
-
-
 def draw_display(
     window,
     fleet,
     controller,
-    tracker,
     state,
     trails,
     selected_ship,
     command_duration,
-    auto_greedy,
     paused,
     message,
     font,
@@ -189,6 +202,8 @@ def draw_display(
         for ship_id in pair
     }
 
+    # Blink every half-second of real time.
+    # This does not affect the simulation clock.
     blink_on = (pygame.time.get_ticks() // 500) % 2 == 0
 
     last_step = fleet.get_distance_metrics()["last_step"]
@@ -197,7 +212,6 @@ def draw_display(
         for pair, result in last_step.items()
         if result["distance_m"] < WARNING_DISTANCE_M
     }
-
     reference = next(iter(fleet.environments.values()))
     margin = 55
 
@@ -228,8 +242,13 @@ def draw_display(
         2,
     )
 
-    for route in controller.routes.values():
-        points = [screen_position(point) for point in route]
+    # Prepared BC journeys are shown for visual comparison only. The
+    # controller does not read these waypoints when choosing actions.
+    for trajectory in fleet.trajectories:
+        points = [
+            screen_position(point)
+            for point in trajectory[:, :2]
+        ]
         if len(points) >= 2:
             pygame.draw.lines(
                 window, (195, 205, 211), False, points, 1
@@ -289,31 +308,11 @@ def draw_display(
             pygame.draw.circle(
                 window, (235, 140, 20), position, 23, 3
             )
-
-        if tracker.is_preparing and tracker.assigned_ship_id == ship_id:
-            pygame.draw.circle(
-                window, (240, 160, 20), position, 26, 2
-            )
-
+        # An outer ring keeps selection and warning visible separately.
         if ship_id in warning_ship_ids and blink_on:
             pygame.draw.circle(
                 window, (220, 35, 35), position, 30, 4
             )
-        if (
-            ship["status"] == "active"
-            and controller.mode.get(ship_id) == "recovering"
-            and ship_id in controller.recovery_target
-        ):
-            target = screen_position(
-                controller.recovery_target[ship_id]
-            )
-            pygame.draw.line(
-                window, (235, 140, 20), position, target, 2
-            )
-            pygame.draw.circle(
-                window, (235, 140, 20), target, 8, 2
-            )
-
         window.blit(
             small_font.render(str(ship_id), True, colour),
             (position[0] + 15, position[1] + 8),
@@ -330,22 +329,24 @@ def draw_display(
     )
     window.blit(
         small_font.render(
-            "Grey: original route   Colour: travelled path",
+            "Grey: BC journey reference   Colour: travelled path",
             True,
             (65, 80, 95),
         ),
         (20, 43),
     )
-
+    # Current closest pair across all active ships.
     if live_pairs:
         closest_pair, closest_distance = min(
             live_pairs.items(),
             key=lambda item: item[1],
         )
+
         closest_text = (
             f"Closest now: {closest_pair[0]} / {closest_pair[1]} "
             f"= {closest_distance:.1f} m"
         )
+
         closest_colour = (
             (210, 30, 30)
             if closest_distance < WARNING_DISTANCE_M
@@ -381,25 +382,28 @@ def draw_display(
         (20, 90),
     )
 
+    # This is a historical measurement from the most recent step,
+    # not a prediction of a future encounter.
     if recent_encounters:
         recent_pair, recent_result = min(
             recent_encounters.items(),
             key=lambda item: item[1]["distance_m"],
         )
+
         recent_text = (
             f"Last-step encounter: {recent_pair[0]} / "
             f"{recent_pair[1]} = "
             f"{recent_result['distance_m']:.1f} m "
             f"at {recent_result['elapsed_seconds']:.1f}s"
         )
+
         window.blit(
             small_font.render(
                 recent_text, True, (180, 90, 10)
             ),
             (20, WINDOW_HEIGHT - 30),
         )
-
-    # ------------------OPERATOR & BUDGET PANEL ------------------
+    # Operator panel.
     pygame.draw.rect(
         window,
         (245, 247, 250),
@@ -415,59 +419,32 @@ def draw_display(
             (panel_x, y),
         )
 
-    text("REMOTE OPERATOR & BUDGET", 12)
-
-    # Operator status
-    if tracker.status == OperatorStatus.AVAILABLE:
-        status_label = "Available"
-        status_col = (20, 135, 60)
-    elif tracker.status == OperatorStatus.PREPARING:
-        status_label = f"Preparing ship {tracker.assigned_ship_id} (Buffer δ: {tracker.preparation_timer:.0f}s)"
-        status_col = (200, 110, 10)
-    else:
-        status_label = f"Assisting ship {tracker.assigned_ship_id} ({tracker.assistance_timer:.0f}s left)"
-        status_col = (20, 90, 200)
-
-    text(f"Operator: {status_label}", 36, colour=status_col)
-
-    # Budget bar & info
-    ratio = tracker.remaining_budget / tracker.total_budget if tracker.total_budget > 0 else 0
-    bar_width = WINDOW_WIDTH - MAP_WIDTH - 30
-    bar_rect = pygame.Rect(panel_x, 62, bar_width, 10)
-    pygame.draw.rect(window, (215, 220, 225), bar_rect, border_radius=3)
-    fill_w = int(bar_width * ratio)
-    fill_col = (30, 150, 70) if ratio > 0.4 else (210, 140, 20) if ratio > 0.15 else (210, 40, 40)
-    if fill_w > 0:
-        pygame.draw.rect(window, fill_col, pygame.Rect(panel_x, 62, fill_w, 10), border_radius=3)
-    pygame.draw.rect(window, (160, 170, 180), bar_rect, 1, border_radius=3)
-
+    text("MANUAL OPERATOR", 15)
     text(
-        f"Budget (b_t): {tracker.remaining_budget:.0f}s / {tracker.total_budget:.0f}s ({ratio*100:.0f}%) | "
-        f"Active: {tracker.total_active_assistance_time:.0f}s | Interventions: {tracker.total_interventions}",
-        76,
-        small=True,
+        f"Selected: {selected_ship} | Duration: {command_duration}s",
+        44,
     )
 
-    greedy_str = "ON" if auto_greedy else "OFF"
-    text(
-        f"Selected: {selected_ship} | Duration (τ): {command_duration}s | Greedy Policy (G): {greedy_str}",
-        96,
-        small=True,
+    operator_ship = current_operator_ship(fleet, controller)
+    operator_label = (
+        "available"
+        if operator_ship is None
+        else f"controlling ship {operator_ship}"
     )
+    text(f"Operator: {operator_label}", 73)
 
-    text("TAB / click row: select ship    UP/DOWN: duration", 118, small=True)
-    text("LEFT/A: left  RIGHT/D: right  S: stop  R: release", 137, small=True)
-    text("SPACE: pause    G: toggle auto-greedy dispatcher    ESC: exit", 156, small=True)
+    text("TAB / click row: select ship", 106, small=True)
+    text("LEFT/A: left  RIGHT/D: right  S: stop  R: release", 129, small=True)
+    text("UP / DOWN: duration    SPACE: pause    ESC: exit", 152, small=True)
 
     run_label = (
         "FINISHED" if fleet.finished
         else "PAUSED" if paused
         else "RUNNING"
     )
-    text(run_label, 178, (170, 85, 20))
+    text(run_label, 177, (170, 85, 20))
 
     row_rectangles = {}
-    action_mask = tracker.get_action_mask(fleet.active_ship_ids)
 
     for index, ship_id in enumerate(fleet.vessel_ids):
         y = ROW_TOP + index * ROW_HEIGHT
@@ -495,17 +472,21 @@ def draw_display(
         if mode == "operator":
             remaining = controller.remaining_seconds(ship_id)
             command_name = controller.operator[ship_id]["direction"]
+
             if command_name == "stop":
                 mode = f"holding ({remaining:.0f}s left)"
             else:
-                mode = f"operator {command_name} ({remaining:.0f}s left)"
-        elif tracker.is_preparing and tracker.assigned_ship_id == ship_id:
-            mode = f"buffer delay ({tracker.preparation_timer:.0f}s left)"
+                mode = (
+                    f"operator {command_name} "
+                    f"({remaining:.0f}s left)"
+                )
 
         neighbour = nearest.get(ship_id)
+
         if neighbour is not None:
             neighbour_text = (
-                f"near {neighbour['ship_id']}: {neighbour['distance_m']:.1f}m"
+                f"near {neighbour['ship_id']}: "
+                f"{neighbour['distance_m']:.1f}m"
             )
         else:
             neighbour_text = (
@@ -520,12 +501,8 @@ def draw_display(
             else (30, 45, 60)
         )
 
-        act_idx = tracker.ship_id_to_action(ship_id)
-        can_assign = action_mask[act_idx]
-        mask_tag = "OK" if can_assign else "--"
-
         text(
-            f"{ship_id}: {mode} | {neighbour_text} | [{mask_tag}]",
+            f"{ship_id}: {mode} | {neighbour_text}",
             y + 2,
             colour=row_colour,
             small=True,
@@ -537,7 +514,7 @@ def draw_display(
             small=True,
         )
 
-    # Status / log message
+    # Two lines keep messages inside the panel.
     words = message.split()
     lines = [""]
     for word in words:
@@ -555,18 +532,12 @@ def draw_display(
 
 
 def main():
-    print(f"\nOperator State & Budget Tracker demo: {FLEET_SIZE} ships.")
-    print("Loading source trajectories and building scenario...")
-
-    source_trajs, source_times = load_source_trajectories(REGION_OF_INTEREST, DT)
-
-    trajectories, timestamps, vessel_ids = build_fleet_scenario(
-        source_trajs,
-        source_times,
+    policy = FrozenBCPolicy()
+    trajectories, timestamps, vessel_ids = load_bc_scenario(
+        policy,
         fleet_size=FLEET_SIZE,
         seed=SCENARIO_SEED,
         min_start_distance=MIN_START_DISTANCE_M,
-        dt=DT,
     )
 
     fleet = FleetSimulator(
@@ -579,86 +550,115 @@ def main():
         dt=DT,
     )
 
-    controller = RouteController(fleet)
-    tracker = OperatorBudgetTracker(
-        vessel_ids=fleet.vessel_ids,
-        total_budget=TOTAL_BUDGET,
-        duration=INITIAL_COMMAND_DURATION,
-        delay=COMMUNICATION_DELAY,
-        dt=fleet.dt,
-        max_simulation_time=MAX_STEPS * DT,
-    )
-
-    pygame.init()
-    pygame.font.init()
-    pygame.display.set_caption("ShipNaviSim — Operator State & Budget Tracker Demo")
-
-    window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-    clock = pygame.time.Clock()
-
-    font = pygame.font.SysFont("Helvetica, Arial", 16)
-    small_font = pygame.font.SysFont("Helvetica, Arial", 13)
-
-    state = fleet.reset(seed=SCENARIO_SEED)
-    controller.reset()
-    tracker.reset()
-
-    trails = {ship_id: [] for ship_id in fleet.vessel_ids}
-    selected_ship = fleet.vessel_ids[0]
-    command_duration = INITIAL_COMMAND_DURATION
-    command_direction = "stop"
-    auto_greedy = False
-    paused = True
-    running = True
-
-    step_interval = 1.0 / STEPS_PER_REAL_SECOND
-    accumulator = 0.0
-    previous_warning_pairs = set()
-
-    message = (
-        "Paused. Select a ship and command LEFT/RIGHT/STOP, "
-        "or press G for Greedy Auto Dispatcher."
-    )
-
     try:
+        state = fleet.reset(seed=SCENARIO_SEED)
+        controller = BCController(fleet, policy=policy)
+        previous_warning_pairs = report_distance_alerts(
+            fleet,
+            state,
+            set(),
+        )
+        if not fleet.active_ship_ids:
+            raise RuntimeError("The scenario has no active ships.")
+
+        selected_ship = fleet.active_ship_ids[0]
+
+        trails = {
+            ship_id: [(ship["x"], ship["y"])]
+            for ship_id, ship in state["ships"].items()
+        }
+
+        pygame.init()
+        window = pygame.display.set_mode((
+            WINDOW_WIDTH, WINDOW_HEIGHT
+        ))
+        pygame.display.set_caption(
+            "ShipNaviSim - Manual Operator and BC Navigation"
+        )
+
+        font = pygame.font.Font(None, 26)
+        small_font = pygame.font.Font(None, 21)
+        clock = pygame.time.Clock()
+
+        # Start paused so the user can inspect and select a vessel.
+        paused = True
+        running = True
+        command_duration = INITIAL_COMMAND_DURATION
+        message = "Select a ship, then press SPACE to begin."
+        row_rectangles = {}
+        accumulator = 0.0
+        step_interval = 1.0 / STEPS_PER_REAL_SECOND
+        finish_reported = False
+
+        print(f"\nManual operator demo: {len(vessel_ids)} ships.")
+        print("The simulation starts PAUSED.")
+        print("TAB or click a panel row: select a ship.")
+        print("LEFT/A or RIGHT/D: issue a timed turn. S: stop and hold.")
+        print("R: release the selected ship early.")
+        print("UP/DOWN: change command duration.")
+        print("SPACE: pause/resume. ESC: exit.")
+        print("There is no scheduled takeover in this demo.")
+
         while running:
-            real_seconds = clock.tick(30) / 1000.0
+            real_seconds = min(clock.tick(30) / 1000.0, 0.25)
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    clicked_pos = event.pos
+
+                elif (
+                    event.type == pygame.MOUSEBUTTONDOWN
+                    and event.button == 1
+                ):
+                    for ship_id, rectangle in row_rectangles.items():
+                        if rectangle.collidepoint(event.pos):
+                            selected_ship = ship_id
+                            message = f"Selected ship {ship_id}."
+                            break
+
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         running = False
+
                     elif event.key == pygame.K_SPACE:
-                        paused = not paused
-                        message = "Paused." if paused else "Resumed simulation."
-                    elif event.key == pygame.K_g:
-                        auto_greedy = not auto_greedy
-                        message = f"Greedy Policy: {'ENABLED' if auto_greedy else 'DISABLED'}."
+                        if not fleet.finished:
+                            paused = not paused
+                            accumulator = 0.0
+                            message = (
+                                "Paused. Commands use simulated time."
+                                if paused
+                                else "Simulation running."
+                            )
+
                     elif event.key == pygame.K_TAB:
                         active = fleet.active_ship_ids
                         if active:
                             if selected_ship in active:
-                                next_index = (
+                                index = (
                                     active.index(selected_ship) + 1
                                 ) % len(active)
-                                selected_ship = active[next_index]
                             else:
-                                selected_ship = active[0]
+                                index = 0
+                            selected_ship = active[index]
                             message = f"Selected ship {selected_ship}."
+
                     elif event.key == pygame.K_UP:
                         command_duration = min(
-                            MAX_COMMAND_DURATION, command_duration + 10
+                            MAX_COMMAND_DURATION,
+                            command_duration + DT,
                         )
-                        tracker.duration = command_duration
-                        message = f"Intervention duration: {command_duration}s."
+                        message = (
+                            f"Next command duration: {command_duration}s."
+                        )
+
                     elif event.key == pygame.K_DOWN:
-                        command_duration = max(10, command_duration - 10)
-                        tracker.duration = command_duration
-                        message = f"Intervention duration: {command_duration}s."
+                        command_duration = max(
+                            DT, command_duration - DT
+                        )
+                        message = (
+                            f"Next command duration: {command_duration}s."
+                        )
+
                     elif event.key in (
                         pygame.K_LEFT,
                         pygame.K_a,
@@ -670,143 +670,146 @@ def main():
                             message = "Select an active ship first."
                             continue
 
-                        direction = (
-                            "stop" if event.key == pygame.K_s
-                            else "left" if event.key in (pygame.K_LEFT, pygame.K_a)
-                            else "right"
+                        operator_ship = current_operator_ship(
+                            fleet, controller
                         )
-                        command_direction = direction
 
-                        act = tracker.ship_id_to_action(selected_ship)
-                        if not tracker.is_action_valid(act, fleet.active_ship_ids):
-                            if not tracker.is_available:
-                                message = (
-                                    f"Operator busy with ship {tracker.assigned_ship_id} "
-                                    f"({tracker.status.name})."
-                                )
-                            elif not tracker.has_sufficient_budget:
-                                message = (
-                                    f"Insufficient budget ({tracker.remaining_budget:.0f}s left). "
-                                    f"Requires {tracker.duration:.0f}s."
-                                )
-                            else:
-                                message = f"Cannot assign ship {selected_ship}."
+                        if (
+                            operator_ship is not None
+                            and operator_ship != selected_ship
+                        ):
+                            message = (
+                                f"Operator busy with {operator_ship}. "
+                                "Select that ship and press R to release."
+                            )
                             continue
 
-                        # Dispatch via OperatorBudgetTracker
-                        tracker.dispatch(act, fleet.active_ship_ids)
-                        message = (
-                            f"Assigned ship {selected_ship} ({direction}). "
-                            f"Entering {tracker.status.name} (buffer {tracker.delay:.0f}s)..."
+                        if event.key == pygame.K_s:
+                            direction = "stop"
+                        elif event.key in (
+                            pygame.K_LEFT, pygame.K_a
+                        ):
+                            direction = "left"
+                        else:
+                            direction = "right"
+
+                        controller.take_over(
+                            selected_ship,
+                            direction=direction,
+                            duration=command_duration,
+                            turn_rate_deg=TURN_RATE_DEG,
                         )
-                        print(f"DISPATCH ship {selected_ship}: {direction} (Status: {tracker.status.name})")
+                        message = (
+                            f"Ship {selected_ship}: {direction} "
+                            f"for {command_duration} simulated seconds."
+                        )
+                        print(message)
 
                     elif event.key == pygame.K_r:
                         if selected_ship not in fleet.active_ship_ids:
                             message = "Select an active ship first."
-                        elif tracker.assigned_ship_id != selected_ship:
-                            message = "The selected ship is not assigned to the operator."
+                        elif controller.mode[selected_ship] != "operator":
+                            message = (
+                                "The selected ship is not under "
+                                "operator control."
+                            )
                         else:
-                            if controller.mode.get(selected_ship) == "operator":
-                                controller.release(selected_ship)
-                            tracker._release_operator()
-                            message = f"Released ship {selected_ship}; operator is now Available."
-                            print(f"EARLY RELEASE ship {selected_ship}.")
+                            controller.release(selected_ship)
+                            message = (
+                                f"Released ship {selected_ship}; "
+                                "BC navigation resumed."
+                            )
 
             if not running:
                 break
-
-            # Greedy auto-intervention policy: assigns assistance to vessel with closest separation
-            if (
-                auto_greedy
-                and tracker.is_available
-                and tracker.has_sufficient_budget
-                and not paused
-                and not fleet.finished
-            ):
-                pairs, nearest = calculate_live_distances(state)
-                candidates = [
-                    (nb["distance_m"], sid)
-                    for sid, nb in nearest.items()
-                    if nb["distance_m"] < WARNING_DISTANCE_M and sid in fleet.active_ship_ids
-                ]
-                if candidates:
-                    candidates.sort()
-                    closest_dist, target_ship = candidates[0]
-                    act = tracker.ship_id_to_action(target_ship)
-                    command_direction = "right"  # turn right to evade
-                    tracker.dispatch(act, fleet.active_ship_ids)
-                    message = (
-                        f"[Greedy] Dispatched assistance to ship {target_ship} "
-                        f"(separation: {closest_dist:.1f}m)."
-                    )
-                    print(message)
 
             if not paused and not fleet.finished:
                 accumulator += real_seconds
 
                 if accumulator >= step_interval:
+                    # Advance at most once per display frame.
                     accumulator -= step_interval
 
-                    # When tracker reaches ASSISTING state, engage RouteController takeover
-                    if tracker.is_assisting and tracker.assigned_ship_id is not None:
-                        aid = tracker.assigned_ship_id
-                        if controller.mode.get(aid) != "operator":
-                            controller.take_over(
-                                aid,
-                                direction=command_direction,
-                                duration=tracker.assistance_timer,
-                                turn_rate_deg=TURN_RATE_DEG,
-                            )
-                            message = f"Operator controlling ship {aid}: turning {command_direction}."
+                    active_before = fleet.active_ship_ids.copy()
+                    modes_before = controller.mode.copy()
+                    statuses_before = {
+                        ship_id: ship["status"]
+                        for ship_id, ship in state["ships"].items()
+                    }
 
                     actions = controller.actions(state)
                     state = fleet.step(actions)
-
-                    tracker_state = tracker.step(active_ship_ids=fleet.active_ship_ids)
-                    if tracker_state.get("transition_event"):
-                        ev = tracker_state["transition_event"]
-                        if "EXPIRED" in ev or "BUDGET" in ev:
-                            message = f"Assistance finished: {ev}."
-
-                    for ship_id in fleet.vessel_ids:
-                        ship = state["ships"][ship_id]
-                        trails[ship_id].append((ship["x"], ship["y"]))
-                        if len(trails[ship_id]) > 100:
-                            trails[ship_id].pop(0)
-
                     previous_warning_pairs = report_distance_alerts(
-                        fleet, state, previous_warning_pairs
+                        fleet,
+                        state,
+                        previous_warning_pairs,
                     )
+                    for ship_id in active_before:
+                        ship = state["ships"][ship_id]
+                        trails[ship_id].append((
+                            ship["x"], ship["y"]
+                        ))
+
+                        if ship["status"] != statuses_before[ship_id]:
+                            print(
+                                f"Ship {ship_id}: {ship['status']} "
+                                f"at step {state['step']}."
+                            )
+                            if ship_id == selected_ship:
+                                message = (
+                                    f"Ship {ship_id}: {ship['status']}."
+                                )
+
+                        elif (
+                            modes_before[ship_id] == "operator"
+                            and controller.mode[ship_id] == "autonomous"
+                        ):
+                            message = (
+                                f"Ship {ship_id}: command finished; "
+                                "BC navigation resumed."
+                            )
+            else:
+                accumulator = 0.0
+
+            if fleet.finished and not finish_reported:
+                finish_reported = True
+                message = "Run finished. Close the window or press ESC."
+                print("\nNo active vessels remain.")
 
             row_rectangles = draw_display(
                 window,
                 fleet,
                 controller,
-                tracker,
                 state,
                 trails,
                 selected_ship,
                 command_duration,
-                auto_greedy,
                 paused,
                 message,
                 font,
                 small_font,
             )
 
-            if pygame.mouse.get_pressed()[0]:
-                mouse_x, mouse_y = pygame.mouse.get_pos()
-                for ship_id, rectangle in row_rectangles.items():
-                    if rectangle.collidepoint(mouse_x, mouse_y):
-                        if ship_id != selected_ship:
-                            selected_ship = ship_id
-                            message = f"Selected ship {selected_ship}."
+        print("\nFinal vessel status:")
+        for ship_id, ship in state["ships"].items():
+            print(f"  Ship {ship_id}: {ship['status']}")
+
+        pair_minima = fleet.get_distance_metrics()["episode_minima"]
+        print(f"\nMeasured {len(pair_minima)} distinct vessel pairs.")
+
+        for pair, result in sorted(
+            pair_minima.items(),
+            key=lambda item: item[1]["distance_m"],
+        )[:10]:
+            print(
+                f"Ships {pair[0]} and {pair[1]}: "
+                f"{result['distance_m']:.2f} m "
+                f"at {result['elapsed_seconds']:.1f}s"
+            )
 
     finally:
         fleet.close()
         pygame.quit()
-        print("Demo ended.")
 
 
 if __name__ == "__main__":

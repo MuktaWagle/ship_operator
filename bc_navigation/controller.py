@@ -76,12 +76,6 @@ class BCController:
             if any(not np.isclose(actual, expected) for actual, expected in checks):
                 raise ValueError("Fleet geometry or dt differs from BC training.")
 
-        # Kept for optional display/reference plotting. The policy does not
-        # read these routes when selecting its next action.
-        self.routes = {
-            ship_id: fleet.trajectories[index][:, :2].copy()
-            for index, ship_id in enumerate(fleet.vessel_ids)
-        }
         self.reset()
 
     def reset(self):

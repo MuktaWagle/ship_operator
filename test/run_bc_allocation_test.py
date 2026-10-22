@@ -9,11 +9,15 @@ At step 2 it dispatches one fixed allocation action, then returns to idle.
 """
 
 import argparse
+import sys
+from pathlib import Path
 
-from allocation_env import FleetAllocationEnv, RewardWeights
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from src.allocation_env import FleetAllocationEnv, RewardWeights
 from bc_navigation import BCController, FrozenBCPolicy, load_bc_scenario
-from fleet_simulator import FleetSimulator
-from operator_tracker import OperatorBudgetTracker
+from src.fleet_simulator import FleetSimulator
+from src.operator_tracker import OperatorBudgetTracker
 
 
 REGION_OF_INTEREST = {
