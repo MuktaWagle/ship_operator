@@ -11,6 +11,7 @@ flowchart LR
     subgraph EntryPoints[Entry points]
         Manual[demo/demo_manual_operator.py]
         Budget[demo/demo_operator_budget.py]
+        AllocationDemo[demo/demo_allocation.py]
         Test[test/run_bc_allocation_test.py]
     end
 
@@ -31,17 +32,20 @@ flowchart LR
 
     Manual --> Scenario
     Budget --> Scenario
+    AllocationDemo --> Scenario
     Test --> Scenario
     Scenario --> Data
     Scenario --> Fleet
     Manual --> Policy
     Budget --> Policy
+    AllocationDemo --> Policy
     Test --> Policy
     Policy --> Model
     Policy --> Fleet
 
     Manual --> Tracker
     Budget --> Tracker
+    AllocationDemo --> Allocation
     Test --> Allocation
     Allocation --> Tracker
     Allocation --> Policy
