@@ -1,10 +1,15 @@
 """Tests for operator state and budget tracker"""
 
+import sys
+from pathlib import Path
+
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from operator_tracker import OperatorBudgetTracker, OperatorStatus
 from fleet_simulator import FleetSimulator
-from route_controller import RouteController
+from test.support import HoldController
 
 
 def test_initialization():
@@ -290,7 +295,7 @@ def test_observation_vector():
 
 
 def test_integration_with_simulator_and_controller():
-    """Integration test: driving FleetSimulator and RouteController with OperatorBudgetTracker."""
+    """Integration test: driving FleetSimulator with OperatorBudgetTracker."""
     region = {
         "LON": (103.82, 103.88),
         "LAT": (1.15, 1.22),
@@ -331,7 +336,7 @@ def test_integration_with_simulator_and_controller():
 
     try:
         state = fleet.reset(seed=42)
-        controller = RouteController(fleet)
+        controller = HoldController(fleet)
         tracker = OperatorBudgetTracker(
             vessel_ids=fleet.vessel_ids,
             total_budget=50,
@@ -369,7 +374,7 @@ def test_integration_with_simulator_and_controller():
         assert tracker.total_interventions == 1
         assert tracker.total_active_assistance_time == 20.0
         assert tracker.remaining_budget == 30.0
-        print("PASS: integration with FleetSimulator and RouteController.")
+        print("PASS: integration with FleetSimulator and test controller.")
 
     finally:
         fleet.close()

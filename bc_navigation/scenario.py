@@ -7,6 +7,21 @@ from pathlib import Path
 import numpy as np
 
 
+def _has_valid_reference_actions(positions, headings, map_width, map_height):
+    """Match ShipEnvironment.gen_actions_from_data validation."""
+    if len(positions) < 3:
+        return False
+
+    movements = np.diff(positions[1:], axis=0)
+    turns = (np.diff(headings) + np.pi) % (2.0 * np.pi) - np.pi
+
+    return bool(
+        np.all(np.abs(turns) <= np.pi / 2.0)
+        and np.all(np.abs(movements[:, 0]) <= map_width / 20.0)
+        and np.all(np.abs(movements[:, 1]) < map_height / 20.0)
+    )
+
+
 def load_bc_scenario(
     policy,
     data=None,
@@ -40,6 +55,14 @@ def load_bc_scenario(
                 continue
 
             heading = np.arctan2(delta[:, 1], delta[:, 0])
+            if not _has_valid_reference_actions(
+                positions,
+                heading,
+                manifest["map_width_m"],
+                manifest["map_height_m"],
+            ):
+                continue
+
             trajectory = np.column_stack((positions[1:], speed, heading))
             candidates.append((journey["ship_id"], trajectory))
 

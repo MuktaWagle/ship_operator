@@ -9,6 +9,10 @@ At step 2 it dispatches one fixed allocation action, then returns to idle.
 """
 
 import argparse
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from allocation_env import FleetAllocationEnv, RewardWeights
 from bc_navigation import BCController, FrozenBCPolicy, load_bc_scenario

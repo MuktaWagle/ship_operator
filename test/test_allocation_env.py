@@ -1,11 +1,16 @@
 """Checks for the fleet allocation state-action-reward environment."""
 
+import sys
+from pathlib import Path
+
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from allocation_env import FleetAllocationEnv, RewardWeights
 from fleet_simulator import FleetSimulator
 from operator_tracker import OperatorBudgetTracker, OperatorStatus
-from route_controller import RouteController
+from test.support import HoldController
 
 
 REGION = {
@@ -46,7 +51,7 @@ def make_env():
         max_steps=4,
         dt=10,
     )
-    controller = RouteController(fleet)
+    controller = HoldController(fleet)
     tracker = OperatorBudgetTracker(
         vessel_ids=[101, 102],
         total_budget=20,

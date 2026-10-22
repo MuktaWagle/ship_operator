@@ -20,9 +20,8 @@ import numpy as np
 import pygame
 
 from fleet_simulator import FleetSimulator
-from route_controller import RouteController
 from operator_tracker import OperatorBudgetTracker, OperatorStatus
-from scenario import load_source_trajectories, build_fleet_scenario
+from bc_navigation import BCController, FrozenBCPolicy, load_bc_scenario
 
 
 FLEET_SIZE = 15
@@ -228,13 +227,6 @@ def draw_display(
         2,
     )
 
-    for route in controller.routes.values():
-        points = [screen_position(point) for point in route]
-        if len(points) >= 2:
-            pygame.draw.lines(
-                window, (195, 205, 211), False, points, 1
-            )
-
     for index, ship_id in enumerate(fleet.vessel_ids):
         ship = state["ships"][ship_id]
         colour = ship_colour(index, len(fleet.vessel_ids))
@@ -299,21 +291,6 @@ def draw_display(
             pygame.draw.circle(
                 window, (220, 35, 35), position, 30, 4
             )
-        if (
-            ship["status"] == "active"
-            and controller.mode.get(ship_id) == "recovering"
-            and ship_id in controller.recovery_target
-        ):
-            target = screen_position(
-                controller.recovery_target[ship_id]
-            )
-            pygame.draw.line(
-                window, (235, 140, 20), position, target, 2
-            )
-            pygame.draw.circle(
-                window, (235, 140, 20), target, 8, 2
-            )
-
         window.blit(
             small_font.render(str(ship_id), True, colour),
             (position[0] + 15, position[1] + 8),
@@ -330,7 +307,7 @@ def draw_display(
     )
     window.blit(
         small_font.render(
-            "Grey: original route   Colour: travelled path",
+            "BC navigation path   Colour: travelled path",
             True,
             (65, 80, 95),
         ),
@@ -556,17 +533,14 @@ def draw_display(
 
 def main():
     print(f"\nOperator State & Budget Tracker demo: {FLEET_SIZE} ships.")
-    print("Loading source trajectories and building scenario...")
+    print("Loading BC navigation scenario...")
 
-    source_trajs, source_times = load_source_trajectories(REGION_OF_INTEREST, DT)
-
-    trajectories, timestamps, vessel_ids = build_fleet_scenario(
-        source_trajs,
-        source_times,
+    policy = FrozenBCPolicy()
+    trajectories, timestamps, vessel_ids = load_bc_scenario(
+        policy,
         fleet_size=FLEET_SIZE,
         seed=SCENARIO_SEED,
         min_start_distance=MIN_START_DISTANCE_M,
-        dt=DT,
     )
 
     fleet = FleetSimulator(
@@ -579,7 +553,7 @@ def main():
         dt=DT,
     )
 
-    controller = RouteController(fleet)
+    controller = BCController(fleet, policy=policy)
     tracker = OperatorBudgetTracker(
         vessel_ids=fleet.vessel_ids,
         total_budget=TOTAL_BUDGET,
@@ -748,7 +722,7 @@ def main():
                 if accumulator >= step_interval:
                     accumulator -= step_interval
 
-                    # When tracker reaches ASSISTING state, engage RouteController takeover
+                    # When tracker reaches ASSISTING state, engage BC controller takeover
                     if tracker.is_assisting and tracker.assigned_ship_id is not None:
                         aid = tracker.assigned_ship_id
                         if controller.mode.get(aid) != "operator":

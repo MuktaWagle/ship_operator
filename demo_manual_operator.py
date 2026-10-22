@@ -7,15 +7,15 @@ Controls:
     LEFT / A     Turn the selected ship left
     RIGHT / D    Turn the selected ship right
     S            Stop and hold the selected ship
-    R            Release control and begin route recovery
+    R            Release control and resume BC navigation
     UP / DOWN    Increase / decrease command duration
     SPACE        Pause / resume
     ESC          Exit
 
 Only one ship can be under manual operator control at a time.
-A recovering ship does not occupy the operator.
+A ship running BC navigation does not occupy the operator.
 
-This demo uses the existing RouteController and FleetSimulator.
+This demo uses the frozen behavioural-cloning navigator and FleetSimulator.
 It does not implement collision avoidance or intervention decisions.
 """
 
@@ -23,11 +23,7 @@ import numpy as np
 import pygame
 
 from fleet_simulator import FleetSimulator
-from route_controller import RouteController
-from scenario import (
-    load_source_trajectories,
-    build_fleet_scenario,
-)
+from bc_navigation import BCController, FrozenBCPolicy, load_bc_scenario
 
 
 FLEET_SIZE = 6
@@ -240,14 +236,6 @@ def draw_display(
         2,
     )
 
-    # Original routes remain visible as thin grey lines.
-    for route in controller.routes.values():
-        points = [screen_position(point) for point in route]
-        if len(points) >= 2:
-            pygame.draw.lines(
-                window, (195, 205, 211), False, points, 1
-            )
-
     for index, ship_id in enumerate(fleet.vessel_ids):
         ship = state["ships"][ship_id]
         colour = ship_colour(index, len(fleet.vessel_ids))
@@ -307,20 +295,6 @@ def draw_display(
             pygame.draw.circle(
                 window, (220, 35, 35), position, 30, 4
             )
-        if (
-            ship["status"] == "active"
-            and controller.mode[ship_id] == "recovering"
-        ):
-            target = screen_position(
-                controller.recovery_target[ship_id]
-            )
-            pygame.draw.line(
-                window, (235, 140, 20), position, target, 2
-            )
-            pygame.draw.circle(
-                window, (235, 140, 20), target, 8, 2
-            )
-
         window.blit(
             small_font.render(str(ship_id), True, colour),
             (position[0] + 15, position[1] + 8),
@@ -337,7 +311,7 @@ def draw_display(
     )
     window.blit(
         small_font.render(
-            "Grey: original route   Colour: travelled path",
+            "BC navigation path   Colour: travelled path",
             True,
             (65, 80, 95),
         ),
@@ -540,15 +514,12 @@ def draw_display(
 
 
 def main():
-    source_trajs, source_times = load_source_trajectories(REGION_OF_INTEREST, DT)
-
-    trajectories, timestamps, vessel_ids = build_fleet_scenario(
-        source_trajs,
-        source_times,
+    policy = FrozenBCPolicy()
+    trajectories, timestamps, vessel_ids = load_bc_scenario(
+        policy,
         fleet_size=FLEET_SIZE,
         seed=SCENARIO_SEED,
         min_start_distance=MIN_START_DISTANCE_M,
-        dt=DT,
     )
 
     fleet = FleetSimulator(
@@ -563,7 +534,7 @@ def main():
 
     try:
         state = fleet.reset(seed=SCENARIO_SEED)
-        controller = RouteController(fleet)
+        controller = BCController(fleet, policy=policy)
         previous_warning_pairs = report_distance_alerts(
             fleet,
             state,
@@ -572,14 +543,7 @@ def main():
         if not fleet.active_ship_ids:
             raise RuntimeError("The scenario has no active ships.")
 
-        # Initially select the active vessel with the longest route.
-        selected_ship = max(
-            fleet.active_ship_ids,
-            key=lambda ship_id: float(np.sum(np.linalg.norm(
-                np.diff(controller.routes[ship_id], axis=0),
-                axis=1,
-            ))),
-        )
+        selected_ship = fleet.active_ship_ids[0]
 
         trails = {
             ship_id: [(ship["x"], ship["y"])]
@@ -591,7 +555,7 @@ def main():
             WINDOW_WIDTH, WINDOW_HEIGHT
         ))
         pygame.display.set_caption(
-            "ShipNaviSim - Manual Operator and Route Recovery"
+            "ShipNaviSim - Manual Operator and BC Navigation"
         )
 
         font = pygame.font.Font(None, 26)
@@ -735,7 +699,7 @@ def main():
                             controller.release(selected_ship)
                             message = (
                                 f"Released ship {selected_ship}; "
-                                "returning to its route."
+                                "BC navigation resumed."
                             )
 
             if not running:
@@ -780,20 +744,11 @@ def main():
 
                         elif (
                             modes_before[ship_id] == "operator"
-                            and controller.mode[ship_id] == "recovering"
-                        ):
-                            message = (
-                                f"Ship {ship_id}: command finished; "
-                                "returning to its route."
-                            )
-
-                        elif (
-                            modes_before[ship_id] == "recovering"
                             and controller.mode[ship_id] == "autonomous"
                         ):
                             message = (
-                                f"Ship {ship_id}: route rejoined; "
-                                "continuing to destination."
+                                f"Ship {ship_id}: command finished; "
+                                "BC navigation resumed."
                             )
             else:
                 accumulator = 0.0

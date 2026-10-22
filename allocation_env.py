@@ -1,7 +1,7 @@
 """
 Gymnasium environment for learning fleet-level operator allocation.
 
-The environment wraps the existing fleet simulator, route controller and
+The environment wraps the existing fleet simulator, navigation controller and
 operator budget tracker.  One environment step is one fleet simulation step
 (``fleet.dt`` seconds), so the allocation policy is sampled proactively at a
 fixed cadence.
@@ -11,11 +11,9 @@ The action is allocation only:
     0       stay idle
     1..N    assign the operator to the corresponding vessel
 
-Once an assignment becomes active, the existing :class:`RouteController`
-executes a configurable fixed maneuver.  
-
-TODO: replace the maneuver with a learned assistance policy without changing the allocation
-interface.
+Once an assignment becomes active, the controller executes the configured
+operator maneuver.  The controller can be the frozen BC navigator used by the
+demos or another controller implementing the same takeover interface.
 """
 
 from dataclasses import dataclass
@@ -27,7 +25,6 @@ from gymnasium import spaces
 
 from fleet_simulator import FleetSimulator
 from operator_tracker import OperatorBudgetTracker
-from route_controller import RouteController
 
 
 @dataclass(frozen=True)
@@ -67,7 +64,7 @@ class FleetAllocationEnv(gym.Env):
     def __init__(
         self,
         fleet: FleetSimulator,
-        controller: RouteController,
+        controller: Any,
         tracker: OperatorBudgetTracker,
         *,
         warning_distance_m: float = 500.0,
@@ -86,7 +83,7 @@ class FleetAllocationEnv(gym.Env):
             )
         if fleet.vessel_ids != list(controller.fleet.vessel_ids):
             raise ValueError(
-                "Fleet and route controller must use the same ordered vessel IDs."
+                "Fleet and navigation controller must use the same ordered vessel IDs."
             )
         if warning_distance_m <= 0:
             raise ValueError("warning_distance_m must be positive.")

@@ -1,6 +1,6 @@
-# ShipNaviSim — Manual Fleet Operator Demo
+# ShipNaviSim — BC Navigation and Fleet Operator Demo
 
-A shared-world vessel simulation for manually steering, stopping and releasing ships while monitoring their separation. Autonomous motion uses a route-following controller; this demo does **not** run a trained RL or behavioural-cloning policy.
+A shared-world vessel simulation for behavioural-cloning (BC) navigation and manual operator intervention. Autonomous motion uses the frozen BC policy from ShipNaviSim 2; the operator can temporarily take over one ship while monitoring fleet separation.
 
 ## Setup and run (Windows / Conda)
 
@@ -9,6 +9,7 @@ Open a terminal in this folder. For your existing environment:
 ```bat
 conda activate maritime-rl
 python -m pip install -r requirements.txt
+python -m pip install -r requirements-bc.txt
 python demo_manual_operator.py
 ```
 
@@ -17,6 +18,7 @@ For a new environment:
 ```bat
 conda env create -f environment.yml
 conda activate maritime-rl
+python -m pip install -r requirements-bc.txt
 python demo_manual_operator.py
 ```
 
@@ -33,15 +35,14 @@ The window starts paused. Select a ship, then press SPACE.
 | LEFT / A | Move while turning left for the chosen duration |
 | RIGHT / D | Move while turning right for the chosen duration |
 | S | Hold position and heading for the chosen duration |
-| R | Release the selected operator-controlled ship early |
-| G | Toggle Greedy Auto-Intervention Dispatcher |
+| R | Release the selected operator-controlled ship early and resume BC navigation |
 | UP / DOWN | Change the duration for the next command in 10-second increments |
 | SPACE | Pause/resume simulation time and command timers |
 | ESC / close window | End the demonstration |
 
-Only one ship can be under manual control at a time. Another command for the same ship replaces its command and restarts the timer. Release or timer expiry frees the operator and starts automatic route recovery. Recovering vessels do not occupy the operator, so another ship can be controlled while recovery continues.
+Only one ship can be under manual control at a time. Another command for the same ship replaces its command and restarts the timer. Release or timer expiry frees the operator and returns the ship to BC navigation. Autonomous vessels do not occupy the operator, so another ship can be controlled after release.
 
-Stop is an immediate hold in this simplified model. Movement resumes through recovery; a ship already on its route can rejoin immediately. Turning continues throughout a left/right command: there is no selectable total-angle command yet. Commands affect movement on simulation steps, with no separate operator reaction delay.
+Stop is an immediate hold in this simplified model. Releasing the ship returns it to BC navigation. Turning continues throughout a left/right command: there is no selectable total-angle command yet. Commands affect movement on simulation steps, with no separate operator reaction delay.
 
 ## Current settings
 
@@ -49,15 +50,15 @@ Edit the constants near the top of `demo_manual_operator.py`.
 
 | Setting | Current value | Meaning |
 |---|---:|---|
-| `FLEET_SIZE` | 10 | Number of selected source routes |
-| `SCENARIO_SEED` | 43 | Reproducible route selection |
-| `DT` | 10 | Simulated seconds per step; also passed to preprocessing |
+| `FLEET_SIZE` | 6 | Number of selected BC journeys |
+| `SCENARIO_SEED` | 43 | Reproducible BC journey selection |
+| `DT` | 10 | Simulated seconds per step; must match BC training |
 | `STEPS_PER_REAL_SECOND` | 3 | Target display stepping rate |
 | `INITIAL_COMMAND_DURATION` | 100 | Initial command duration in simulated seconds |
 | `MAX_COMMAND_DURATION` | 240 | Maximum keyboard-selectable duration |
 | `TURN_RATE_DEG` | 1.0 | Degrees turned per simulated second |
 | `WARNING_DISTANCE_M` | 500 | Live warning threshold in metres |
-| `MIN_START_DISTANCE_M` | 500 | Required separation of selected starting positions |
+| `MIN_START_DISTANCE_M` | 100 | Required separation of selected starting positions |
 | `MAX_STEPS` | 1000 | Episode step limit |
 
 At the current target rate, 30 simulated seconds pass per real second: a 100-second command is visible for about 3.33 real seconds. Set `STEPS_PER_REAL_SECOND = 0.5` for slower viewing: the same command takes about 20 real seconds. Rendering load can make playback slower. Changing playback rate does not change manoeuvre duration in simulation time.
@@ -66,9 +67,9 @@ Keep DT at 10 for the existing demonstration. Changing command duration changes 
 
 ## Data and fleet layouts
 
-Input: `raw_data/synthetic_ais_data.csv` (included). The loader filters the configured longitude/latitude region, valid headings and status 0; sorts records; splits journeys at gaps over 30 minutes; and interpolates routes at DT-second intervals. The scenario builder selects sufficiently long routes with the requested starting separation, preserves their coordinates and aligns their start times. Simulated IDs start at 10000; the terminal reports each selected source trajectory index.
+The BC scenario loader selects synchronized journeys from `bc_navigation/data_bc/journeys.npz` using the manifest and the frozen policy's preprocessing metadata. Those journeys provide initial positions and final goals; the BC model chooses each subsequent turn and speed from the live ship state, rather than following stored waypoints. Original journey IDs are retained for reproducibility.
 
-This is synthetic simultaneous traffic, not evidence that these ships travelled together at those times. Source CSV provenance beyond the supplied project is not independently verified.
+This is synthetic simultaneous traffic, not evidence that these ships travelled together at those times.
 
 Change the seed for another reproducible selection. Increase starting separation to reduce initial clustering, or reduce fleet size if selection fails. The selection search tries up to 200 random orderings; failure does not prove no valid selection exists. Starting separation does not guarantee uniform coverage or prevent later convergence. There is no generator guaranteeing only two or three close encounters.
 
@@ -90,23 +91,16 @@ Last-step minima assume linear motion between step endpoints. They are retrospec
 
 | File | Purpose |
 |---|---|
-| `demo_manual_operator.py` | Main Pygame interface, manual commands and live alerts |
-| `scenario.py` | Shared trajectory loading and fleet selection |
-| `route_controller.py` | Route following, timed turns/hold and route recovery |
+| `demo_manual_operator.py` | Main Pygame interface, BC navigation, manual commands and live alerts |
+| `demo_operator_budget.py` | Pygame interface with live operator HUD, budget tracker and BC navigation |
+| `bc_navigation/` | Inference-only BC controller, scenario loader, frozen model and prepared data |
 | `fleet_simulator.py` | Shared clock/state, movement, retirement and pair distances |
 | `ship_env.py` | Underlying vessel environment and coordinate conversion |
-| `utils.py`, `split_chunks.py` | Supporting calculations and data preprocessing |
-| `raw_data/synthetic_ais_data.csv` | Source data |
+| `utils.py` | Supporting coordinate and angle calculations |
 | `star-icon.jpg` | Asset retained for the underlying environment renderer |
 | `operator_tracker.py` | Operator status (Available/Preparing/Assisting), budget tracker, action masking |
 | `allocation_env.py` | Gymnasium state-action-reward environment for learning operator allocation |
-| `test_allocation_env.py` | Checks for allocation observations, action masks and event rewards |
-| `bc_navigation/` | Inference-only learned navigation controller, scenario loader and frozen model/data |
-| `run_bc_allocation_test.py` | Headless BC-navigation plus operator-allocation integration check |
-| `demo_operator_budget.py` | Pygame interface with live operator HUD and budget tracker |
-| `run_simulation_test.py` | Headless terminal simulation test of fleet and operator budget |
-| `test_operator_tracker.py` | Unit and integration tests for operator & budget tracker |
-| `test_fleet_reset.py`, `test_fleet_endings.py` | Existing simulator checks |
+| `test/` | Allocation, operator, fleet-regression and BC integration checks |
 | `requirements.txt`, `requirements-bc.txt`, `environment.yml` | Installation dependencies |
 | `LICENSE` | Original project licence, retained unchanged |
 
@@ -115,8 +109,10 @@ Last-step minima assume linear motion between step endpoints. They are retrospec
 Construct `FleetSimulator` using trajectories (columns x, y, speed, heading), timestamps, unique vessel IDs, region, dt and maximum steps. Timestamps must start together and match dt.
 
 ```python
+from bc_navigation import BCController, FrozenBCPolicy
+
 state = fleet.reset(seed=43)
-controller = RouteController(fleet)
+controller = BCController(fleet, policy=FrozenBCPolicy())
 while not fleet.finished:
     actions = controller.actions(state)
     state = fleet.step(actions)
@@ -129,9 +125,9 @@ Use `get_state()`, `active_ship_ids`, `finished`, `get_distance_metrics()` and `
 
 Arrival means distance to goal is less than 200 m. Retired vessels keep their final state but leave active traffic and stop receiving commands. Ships that finish within a step are included in that step's distance measurements. Reset clears distance metrics. Closing the demo early can leave ships marked active; that alone is not an error.
 
-`RouteController.take_over(ship_id, direction, duration, turn_rate_deg)` accepts `left`, `right`, or `stop`. `release(ship_id)` initiates recovery. Duration must be positive, finite and a multiple of dt. The one-operator restriction is enforced by the demo, not by `RouteController` itself; integrations must enforce it too.
+`BCController.take_over(ship_id, direction, duration, turn_rate_deg)` accepts `left`, `right`, or `stop`. `release(ship_id)` returns the vessel to BC navigation. Duration must be positive, finite and a multiple of dt. The one-operator restriction is enforced by the demo, not by `BCController` itself; integrations must enforce it too.
 
-Recovery projects onto the remaining reference route and navigates from the ship's actual location; it does not teleport the ship. Cruise speed is the route's median source speed clipped to 3–8 m/s. Recovery can rotate in place. These are prototype kinematics, not realistic ship dynamics.
+The BC policy predicts a bounded turn and speed from the vessel's current position, heading, speed and goal. These are prototype kinematics, not realistic ship dynamics.
 
 ## Operator state and budget tracker interface
 
@@ -223,14 +219,14 @@ reward = wg * newly_completed_journeys
 
 The default collision threshold is 50 m and the default near-miss threshold
 is 500 m. These are configuration values, not physical safety definitions.
-The allocation environment currently uses a configurable fixed assistance
-maneuver (`right` by default); replacing that maneuver with a learned
-assistance controller is a separate phase.
+The allocation environment currently uses a configurable operator assistance
+maneuver (`right` by default); the navigation controller handles autonomous
+motion and resumes BC navigation when assistance ends.
 
 Run its checks with:
 
 ```bash
-python test_allocation_env.py
+python -m test.test_allocation_env
 ```
 
 ### BC navigation integration
@@ -246,7 +242,7 @@ Install the optional PyTorch dependency before running the integration check:
 
 ```bash
 python -m pip install -r requirements-bc.txt
-python run_bc_allocation_test.py
+python -m test.run_bc_allocation_test
 ```
 
 The integration test uses the prepared training split, runs BC navigation for
@@ -256,13 +252,13 @@ the prepared validation and test splits untouched for evaluation.
 
 1. **Unit & Integration Tests**:
 ```bash
-python test_operator_tracker.py
+python -m test.test_operator_tracker
 ```
 
-2. **Headless Terminal Simulation Test**:
-Runs a full 30-step simulation log showing step-by-step budget consumption, buffer delay, and action masking:
+2. **Fleet Regression Checks**:
 ```bash
-python run_simulation_test.py
+python -m test.test_fleet_reset
+python -m test.test_fleet_endings
 ```
 
 3. **Pygame Visual Simulator Demo**:
@@ -271,16 +267,8 @@ Launches the fleet simulator with the live Operator State & Budget HUD (status b
 python demo_operator_budget.py
 ```
 
-4. **Existing Simulator Regression Checks**:
-```bash
-python test_fleet_reset.py
-python test_fleet_endings.py
-```
-
 ## Scope and cleanup
 
-The maintained entry point is `demo_manual_operator.py`. Shared preprocessing was extracted from `demo_operator_recovery.py` into `scenario.py`, so the manual demo no longer depends on an older demo script. Runtime messages now use the actual fleet size and include the stop key.
+The maintained entry points are `demo_manual_operator.py` and `demo_operator_budget.py`. Fixed-route navigation, its source CSV/preprocessing modules, and its standalone headless runner were removed. The final project uses the frozen BC package for autonomous navigation and keeps all checks under `test/`.
 
-Removed from this cleaned package: `archive/`, obsolete `demo_fleet_manager.py` and `demo_operator_recovery.py`, legacy training scripts `IL-BC.py` and `det_bc.py`, legacy dataset/replay script `test_env.py`, the stray `conda` file, Python caches, and the superseded `Theja_README_fleet.md`. The original long training environment/dependencies were replaced by demo-focused installation files. The original upload remains recoverable through file version history.
-
-Core simulator/controller behaviour and your selected settings are retained. Minari is imported only when its optional export helper is called. Further work includes selectable turn angles (deferred), deliberate encounter layouts, timestamped intervention logs, trained policies, operator allocation, and a fleet training wrapper. None of these is claimed as implemented here.
+Core simulator behaviour and your selected settings are retained. Minari is imported only when its optional export helper is called. Further work includes selectable turn angles (deferred), deliberate encounter layouts, timestamped intervention logs, trained allocation policies, and a fleet training wrapper.
