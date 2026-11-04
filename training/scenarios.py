@@ -33,7 +33,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from bc_navigation import BCController, FrozenBCPolicy, load_bc_scenario  # noqa: E402
-from operator_planner import PlanningBCController, RuleBasedPlanner, VelocityObstaclePlanner  # noqa: E402
 from src.allocation_env import FleetAllocationEnv, RewardWeights  # noqa: E402
 from src.fleet_simulator import FleetSimulator  # noqa: E402
 from src.operator_tracker import OperatorBudgetTracker  # noqa: E402
@@ -67,9 +66,6 @@ class EnvConfig:
     reward_collision: float = 10.0
     reward_near_miss: float = 1.0
     reward_intervention: float = 1.0
-    # Task 5: what an assisted vessel does. "bc" = fixed manoeuvre from
-    # assistance_direction (original behaviour); "rule" / "vo" = planning operator.
-    controller: str = "bc"
 
     def reward_weights(self) -> RewardWeights:
         return RewardWeights(
@@ -112,13 +108,7 @@ def build_env(config: EnvConfig, scenario_seed: int, policy: Optional[FrozenBCPo
         enable_graphics=False,
         dt=config.dt,
     )
-    if config.controller == "bc":
-        controller = BCController(fleet, policy=policy)
-    elif config.controller in ("rule", "vo"):
-        planner = RuleBasedPlanner() if config.controller == "rule" else VelocityObstaclePlanner()
-        controller = PlanningBCController(fleet, policy=policy, planner=planner)
-    else:
-        raise ValueError(f"Unknown controller {config.controller!r}; use bc, rule or vo.")
+    controller = BCController(fleet, policy=policy)
     tracker = OperatorBudgetTracker(
         vessel_ids=fleet.vessel_ids,
         total_budget=config.total_budget_s,
@@ -139,8 +129,6 @@ def build_env(config: EnvConfig, scenario_seed: int, policy: Optional[FrozenBCPo
         speed_scale_mps=config.speed_scale_mps,
         invalid_action_penalty=config.invalid_action_penalty,
     )
-    if config.controller != "bc":
-        env.assistance_direction = "avoid"  # the constructor only accepts left/right/stop
     env.scenario_seed = int(scenario_seed)
     env.ship_set = frozenset(int(v) for v in vessel_ids)
     return env
