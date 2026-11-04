@@ -32,8 +32,6 @@ def parse_args(argv=None):
     p.add_argument("--fleet-size", type=int, default=10)
     p.add_argument("--min-start-distance", type=float, default=800.0)
     p.add_argument("--maneuver", choices=("right", "left", "stop"), default="right", help="fixed assistance manoeuvre (until Task 5 controller exists)")
-    p.add_argument("--controller", choices=("bc", "rule", "vo"), default="bc",
-                   help="bc = fixed --maneuver; rule / vo = Task 5 planning operator")
     p.add_argument("--max-steps", type=int, default=300)
     p.add_argument("--train-scenarios", type=int, default=12, help="number of journey selections in the training pool")
     p.add_argument("--eval-scenarios", type=int, default=4)
@@ -77,7 +75,6 @@ def main(argv=None):
         max_steps=args.max_steps,
         min_start_distance_m=args.min_start_distance,
         assistance_direction=args.maneuver,
-        controller=args.controller,
         total_budget_s=args.budget,
         duration_s=args.duration,
         delay_s=args.delay,
