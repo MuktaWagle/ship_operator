@@ -54,8 +54,8 @@ class EnvConfig:
     dt: int = 10
     min_start_distance_m: float = 800.0
     total_budget_s: float = 300.0
-    duration_s: float = 60.0
-    delay_s: float = 10.0
+    duration_s: float = 20.0
+    delay_s: float = 0.0
     warning_distance_m: float = 500.0
     collision_distance_m: float = 50.0
     assistance_direction: str = "right"
@@ -64,7 +64,7 @@ class EnvConfig:
     invalid_action_penalty: float = 0.0
     reward_completed: float = 1.0
     reward_collision: float = 10.0
-    reward_near_miss: float = 1.0
+    reward_near_miss: float = 5.0
     reward_intervention: float = 1.0
 
     def reward_weights(self) -> RewardWeights:

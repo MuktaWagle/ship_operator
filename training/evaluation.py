@@ -4,8 +4,8 @@ from typing import Callable, Dict, Iterable, List
 
 import numpy as np
 
-from .dqn import MaskedDQNAgent
-from .features import ObservationEncoder
+from training.dqn import MaskedDQNAgent
+from training.features import ObservationEncoder
 
 
 class DQNPolicy:

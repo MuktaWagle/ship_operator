@@ -33,7 +33,7 @@ class RewardWeights:
 
     completed_journey: float = 1.0
     collision: float = 10.0
-    near_miss: float = 1.0
+    near_miss: float = 5.0
     intervention: float = 1.0
 
 

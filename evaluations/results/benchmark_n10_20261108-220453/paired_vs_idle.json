@@ -1,0 +1,30 @@
+{
+  "greedy_highest_risk": {
+    "scenarios": 8,
+    "gain_mean": -10.0,
+    "gain_std": 2.6726124191242437,
+    "gain_se": 0.9449111825230679,
+    "win_rate": 0.0
+  },
+  "dqn": {
+    "scenarios": 8,
+    "gain_mean": -5.25,
+    "gain_std": 5.800246300189083,
+    "gain_se": 2.050696745707942,
+    "win_rate": 0.0
+  },
+  "ppo": {
+    "scenarios": 8,
+    "gain_mean": -2.5,
+    "gain_std": 4.6291004988627575,
+    "gain_se": 1.6366341767699428,
+    "win_rate": 0.0
+  },
+  "mcts": {
+    "scenarios": 8,
+    "gain_mean": 2.5,
+    "gain_std": 2.390457218668787,
+    "gain_se": 0.8451542547285165,
+    "win_rate": 0.875
+  }
+}
