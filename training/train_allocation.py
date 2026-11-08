@@ -41,10 +41,10 @@ def parse_args(argv=None):
     p.add_argument("--no-risk-features", action="store_true", help="train on the raw Task 3 observation only")
     # operator / reward
     p.add_argument("--budget", type=float, default=300.0)
-    p.add_argument("--duration", type=float, default=60.0)
-    p.add_argument("--delay", type=float, default=10.0)
+    p.add_argument("--duration", type=float, default=20.0)
+    p.add_argument("--delay", type=float, default=0.0)
     p.add_argument("--w-collision", type=float, default=10.0)
-    p.add_argument("--w-near-miss", type=float, default=1.0)
+    p.add_argument("--w-near-miss", type=float, default=5.0)
     p.add_argument("--w-intervention", type=float, default=1.0)
     p.add_argument("--w-completed", type=float, default=1.0)
     # DQN
