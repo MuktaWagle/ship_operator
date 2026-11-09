@@ -25,7 +25,6 @@ from dataclasses import asdict, dataclass, field
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
-from operator_planner import PlanningBCController, RuleBasedPlanner, VelocityObstaclePlanner
 
 import numpy as np
 
@@ -34,6 +33,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from bc_navigation import BCController, FrozenBCPolicy, load_bc_scenario  # noqa: E402
+from operator_planner import PlanningBCController, RuleBasedPlanner, VelocityObstaclePlanner  # noqa: E402
 from src.allocation_env import FleetAllocationEnv, RewardWeights  # noqa: E402
 from src.fleet_simulator import FleetSimulator  # noqa: E402
 from src.operator_tracker import OperatorBudgetTracker  # noqa: E402
@@ -67,7 +67,8 @@ class EnvConfig:
     reward_collision: float = 10.0
     reward_near_miss: float = 5.0
     reward_intervention: float = 1.0
-
+    # Task 5: what an assisted vessel does. "bc" = fixed manoeuvre from
+    # assistance_direction (original behaviour); "rule" / "vo" = planning operator.
     controller: str = "bc"
 
     def reward_weights(self) -> RewardWeights:
@@ -139,7 +140,7 @@ def build_env(config: EnvConfig, scenario_seed: int, policy: Optional[FrozenBCPo
         invalid_action_penalty=config.invalid_action_penalty,
     )
     if config.controller != "bc":
-        env.assistance_direction = "avoid"
+        env.assistance_direction = "avoid"  # the constructor only accepts left/right/stop
     env.scenario_seed = int(scenario_seed)
     env.ship_set = frozenset(int(v) for v in vessel_ids)
     return env

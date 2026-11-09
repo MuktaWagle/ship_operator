@@ -33,7 +33,7 @@ def main(argv=None):
     p.add_argument("--seed-offset", type=int, default=20_000,
                    help="scenario seeds start here (kept away from training seeds)")
     p.add_argument("--controller", choices=("bc", "rule", "vo"), default=None,
-                   help="override the operator used at evaluation (default: the one saved in the checkpoint)")
+                   help="override the operator stored in the checkpoint (default: use the checkpoint's)")
     p.add_argument("--baselines", nargs="*", default=None, help="subset of: idle random_valid greedy_nearest risk_threshold")
     args = p.parse_args(argv)
 
@@ -43,7 +43,7 @@ def main(argv=None):
     env_config = EnvConfig(**extra["env_config"])
     split = args.split or ("test" if env_config.fleet_size <= 4 else "train")
     env_config = EnvConfig(**{**env_config.to_dict(), "split": split})
-    if args.controller:
+    if args.controller is not None:
         env_config = EnvConfig(**{**env_config.to_dict(), "controller": args.controller})
     
     exclude = (extra.get("train_ship_sets", []) + extra.get("eval_ship_sets", [])) if split == "train" else []

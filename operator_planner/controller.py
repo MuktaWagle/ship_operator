@@ -64,6 +64,7 @@ class PlanningBCController(BCController):
         ):
             raise ValueError("Duration must be a positive multiple of dt.")
 
+        self.planner.forget(ship_id)  # a new takeover starts with a clean memory for this vessel
         ship = self.fleet.get_state()["ships"][ship_id]
         self.operator[ship_id] = {
             "direction": "avoid",
