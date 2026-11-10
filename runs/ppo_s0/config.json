@@ -3,7 +3,10 @@
     "run_name": "ppo_s0",
     "fleet_size": 10,
     "min_start_distance": 800.0,
+    "scenario_source": "real",
+    "synthetic_spec": "400:1500,250:1000",
     "maneuver": "right",
+    "controller": "bc",
     "max_steps": 300,
     "train_scenarios": 12,
     "eval_scenarios": 4,
@@ -68,7 +71,10 @@
     "reward_completed": 1.0,
     "reward_collision": 10.0,
     "reward_near_miss": 5.0,
-    "reward_intervention": 1.0
+    "reward_intervention": 1.0,
+    "controller": "bc",
+    "scenario_source": "real",
+    "synthetic_spec": "400:1500,250:1000"
   },
   "encoder": {
     "risk_features": true,
