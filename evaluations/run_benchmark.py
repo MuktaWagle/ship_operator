@@ -63,7 +63,18 @@ def parse_args(argv=None):
                    default=["idle", "greedy_highest_risk"],
                    help="choose baseline policies (default: idle greedy_highest_risk)")
     p.add_argument("--scenarios", type=int, default=6, help="number of unseen evaluation scenarios")
+    p.add_argument("--scenario-source", choices=("real", "synthetic", "mixed"), default=None,
+                   help="where scenarios come from; default: the checkpoint's own setting (real if none). "
+                        "Use real on a synthetic-trained checkpoint for the realistic test set.")
+    p.add_argument("--synthetic-spec", default=None, metavar="S:O[,S:O...]",
+                   help="synthetic difficulty as SPREAD_S:OFFSET_M pairs; default: the checkpoint's own")
     p.add_argument("--seed-offset", type=int, default=20_000)
+    p.add_argument("--exclude-scope", choices=("all", "train"), default="all",
+                   help="which ship sets of the loaded checkpoints are kept out of the evaluation scenarios: "
+                        "all = their training and held-out sets (default), train = training sets only")
+    p.add_argument("--exclude-from", nargs="*", default=None, metavar="WORD",
+                   help="only keep out the sets of checkpoints whose label contains one of these words "
+                        "(default: every loaded checkpoint)")
     p.add_argument("--calibration-scenarios", type=int, default=4)
     p.add_argument("--calibration-seed-offset", type=int, default=40_000)
     p.add_argument("--split", choices=("train", "val", "test"), default=None,
@@ -82,7 +93,7 @@ def parse_args(argv=None):
     p.add_argument("--duration", type=float, default=20.0)
     p.add_argument("--delay", type=float, default=0.0)
     # MCTS
-    p.add_argument("--mcts-rollouts", type=int, default=60)
+    p.add_argument("--mcts-rollouts", type=int, default=150)
     p.add_argument("--mcts-horizon", type=int, default=40)
     p.add_argument("--mcts-depth", type=int, default=12)
     p.add_argument("--mcts-top-k", type=int, default=3)
@@ -110,14 +121,27 @@ def base_env_config(args, loaded):
             other = EnvConfig(**extra["env_config"])
             if other.fleet_size != config.fleet_size:
                 raise SystemExit(f"{label} was trained with fleet size {other.fleet_size}, expected {config.fleet_size}.")
-        if controller is not None:
-            config = EnvConfig(**{**config.to_dict(), "controller": controller})
+        overrides = {
+            key: value for key, value in (
+                ("controller", controller),
+                ("scenario_source", getattr(args, "scenario_source", None)),
+                ("synthetic_spec", getattr(args, "synthetic_spec", None)),
+            ) if value is not None
+        }
+        if overrides:
+            config = EnvConfig(**{**config.to_dict(), **overrides})
         return config
     return EnvConfig(
         fleet_size=args.fleet_size, min_start_distance_m=args.min_start_distance,
         assistance_direction=args.maneuver, max_steps=args.max_steps,
         total_budget_s=args.budget, duration_s=args.duration, delay_s=args.delay,
         controller=controller or "bc",
+        **{
+            key: value for key, value in (
+                ("scenario_source", getattr(args, "scenario_source", None)),
+                ("synthetic_spec", getattr(args, "synthetic_spec", None)),
+            ) if value is not None
+        },
     )
 
 
@@ -302,8 +326,12 @@ def main(argv=None):
 
     exclude = []
     if split == "train":
-        for _, _, _, extra in loaded:
-            exclude += extra.get("train_ship_sets", []) + extra.get("eval_ship_sets", [])
+        for label, _, _, extra in loaded:
+            if args.exclude_from and not any(word in label for word in args.exclude_from):
+                continue
+            exclude += extra.get("train_ship_sets", [])
+            if args.exclude_scope == "all":
+                exclude += extra.get("eval_ship_sets", [])
 
     print(f"Building {args.scenarios} evaluation scenarios (fleet={config.fleet_size}, split={split})...")
     eval_envs = build_unique_envs(eval_config, args.scenarios, args.seed_offset, exclude_sets=exclude)

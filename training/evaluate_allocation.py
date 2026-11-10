@@ -34,6 +34,11 @@ def main(argv=None):
                    help="scenario seeds start here (kept away from training seeds)")
     p.add_argument("--controller", choices=("bc", "rule", "vo"), default=None,
                    help="override the operator stored in the checkpoint (default: use the checkpoint's)")
+    p.add_argument("--scenario-source", choices=("real", "synthetic", "mixed"), default=None,
+                   help="where scenarios come from; default: the checkpoint's own setting (real if none). "
+                        "Use real on a synthetic-trained checkpoint for the realistic test set.")
+    p.add_argument("--synthetic-spec", default=None, metavar="S:O[,S:O...]",
+                   help="synthetic difficulty as SPREAD_S:OFFSET_M pairs; default: the checkpoint's own")
     p.add_argument("--baselines", nargs="*", default=None, help="subset of: idle random_valid greedy_nearest risk_threshold")
     args = p.parse_args(argv)
 
@@ -43,8 +48,12 @@ def main(argv=None):
     env_config = EnvConfig(**extra["env_config"])
     split = args.split or ("test" if env_config.fleet_size <= 4 else "train")
     env_config = EnvConfig(**{**env_config.to_dict(), "split": split})
-    if args.controller is not None:
-        env_config = EnvConfig(**{**env_config.to_dict(), "controller": args.controller})
+    overrides = {
+        key: getattr(args, key) for key in ("controller", "scenario_source", "synthetic_spec")
+        if getattr(args, key) is not None
+    }
+    if overrides:
+        env_config = EnvConfig(**{**env_config.to_dict(), **overrides})
     
     exclude = (extra.get("train_ship_sets", []) + extra.get("eval_ship_sets", [])) if split == "train" else []
     envs = build_unique_envs(env_config, args.scenarios, args.seed_offset, exclude_sets=exclude)

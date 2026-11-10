@@ -24,6 +24,7 @@ from training.dqn import DQNConfig, MaskedDQNAgent
 from training.evaluation import DQNPolicy, evaluate, summarise  
 from training.features import ObservationEncoder 
 from training.scenarios import EnvConfig, ScenarioPool, build_heldout_envs 
+from training.synthetic_scenarios import DEFAULT_SPEC  # noqa: E402
 
 
 def parse_args(argv=None):
@@ -33,6 +34,11 @@ def parse_args(argv=None):
     p.add_argument("--min-start-distance", type=float, default=800.0)
     p.add_argument("--controller", choices=("bc", "rule", "vo"), default="bc",
                    help="bc = fixed --maneuver; rule / vo = Task 5 planning operator")
+    p.add_argument("--scenario-source", choices=("real", "synthetic", "mixed"), default="real",
+                   help="real = BC journeys from the data; synthetic = generated crossing routes; "
+                        "mixed = alternate by seed (see training/synthetic_scenarios.py)")
+    p.add_argument("--synthetic-spec", default=DEFAULT_SPEC, metavar="S:O[,S:O...]",
+                   help="synthetic difficulty as SPREAD_S:OFFSET_M pairs that take turns; smaller = denser conflicts")
     p.add_argument("--maneuver", choices=("right", "left", "stop"), default="right", help="fixed assistance manoeuvre (until Task 5 controller exists)")
     p.add_argument("--max-steps", type=int, default=300)
     p.add_argument("--train-scenarios", type=int, default=12, help="number of journey selections in the training pool")
@@ -85,6 +91,8 @@ def main(argv=None):
         reward_near_miss=args.w_near_miss,
         reward_intervention=args.w_intervention,
         controller=args.controller,
+        scenario_source=args.scenario_source,
+        synthetic_spec=args.synthetic_spec,
     )
     print(f"Building up to {args.train_scenarios} distinct training scenarios (fleet={args.fleet_size})...")
     pool = ScenarioPool(env_config, args.train_scenarios, start_seed=args.seed * 1000, rng_seed=args.seed)
