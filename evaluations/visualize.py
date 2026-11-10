@@ -47,6 +47,9 @@ SPEEDS = [0.5, 1, 2, 3, 5, 10, 20, 50]
 BACKGROUND = (232, 244, 250)
 TEXT = (30, 50, 70)
 
+# Filled in build_policies(): checkpoint label -> on-screen name, e.g. "DQN (dqn_gate)".
+CHECKPOINT_DISPLAY_NAMES = {}
+
 POLICY_DISPLAY_NAMES = {
     "idle": "Idle",
     "greedy_highest_risk": "Greedy Highest Risk",
@@ -85,7 +88,7 @@ def parse_args(argv=None):
     p.add_argument("--duration", type=float, default=20.0)
     p.add_argument("--delay", type=float, default=0.0)
     # MCTS
-    p.add_argument("--mcts-rollouts", type=int, default=60)
+    p.add_argument("--mcts-rollouts", type=int, default=150)
     p.add_argument("--mcts-horizon", type=int, default=40)
     p.add_argument("--mcts-depth", type=int, default=12)
     p.add_argument("--mcts-top-k", type=int, default=3)
@@ -108,6 +111,8 @@ def build_policies(args, loaded, eval_envs, eval_config):
         encoder = ObservationEncoder.for_env(eval_envs[0], **extra["encoder"])
         wrapper = DQNPolicy if group == "dqn" else PPOPolicy
         policies[label] = wrapper(agent, encoder)
+    CHECKPOINT_DISPLAY_NAMES.clear()
+    CHECKPOINT_DISPLAY_NAMES.update(checkpoint_display_names(loaded))
     if args.mcts:
         config = ModelMCTSConfig(
             rollouts=args.mcts_rollouts, horizon=args.mcts_horizon, tree_depth=args.mcts_depth,
@@ -116,16 +121,38 @@ def build_policies(args, loaded, eval_envs, eval_config):
         policies["mcts"] = ModelMCTSPolicy(config)
     return policies
 
+def checkpoint_display_names(loaded):
+    """On-screen names for loaded checkpoints.
+
+    """
+    names = {}
+    for label, group, _, extra in loaded:
+        if group == "dqn":
+            names[label] = "DQN (dqn_gate)" if (extra or {}).get("benefit") else "DQN (dqn_no_gate)"
+        else:
+            names[label] = f"PPO ({label.split(':', 1)[1].split('/')[0]})"
+    counts = {}
+    for name in names.values():
+        counts[name] = counts.get(name, 0) + 1
+    for label, name in names.items():
+        if counts[name] > 1:
+            names[label] = f"{name[:-1]}, {label.split(':', 1)[1]})"
+    return names
+
+
 def display_policy_name(name):
+    if name in CHECKPOINT_DISPLAY_NAMES:
+        return CHECKPOINT_DISPLAY_NAMES[name]
     if name in POLICY_DISPLAY_NAMES:
         return POLICY_DISPLAY_NAMES[name]
 
-    # Checkpoint policies, e.g. dqn:dqn_s0/best
+    # Checkpoint policies, e.g. dqn:dqn_s0/best -> "DQN (dqn_s0/best)", so several
+    # checkpoints (e.g. with and without the benefit gate) can be told apart on screen.
     if name.startswith("dqn:"):
-        return "DQN"
+        return f"DQN ({name[4:]})"
 
     if name.startswith("ppo:"):
-        return "PPO"
+        return f"PPO ({name[4:]})"
 
     return name
 
@@ -244,6 +271,10 @@ class Viewer:
                     if time.time() - self.finished_at > 1.5:
                         if self.policy_index < len(self.policy_names) - 1:
                             self.set_policy(self.policy_index + 1)
+                        elif self.scenario_index < len(self.envs) - 1:
+                            # Last policy done: move to the next scenario, first policy.
+                            self.policy_index = 0
+                            self.set_scenario(self.scenario_index + 1)
                         else:
                             self.auto = False
 
