@@ -37,6 +37,9 @@ from operator_planner import PlanningBCController, RuleBasedPlanner, VelocityObs
 from src.allocation_env import FleetAllocationEnv, RewardWeights  # noqa: E402
 from src.fleet_simulator import FleetSimulator  # noqa: E402
 from src.operator_tracker import OperatorBudgetTracker  # noqa: E402
+from training.synthetic_scenarios import (  # noqa: E402
+    DEFAULT_SPEC, SOURCES, make_crossing_scenario, parse_spec, setting_for, uses_synthetic,
+)
 
 
 REGION_OF_INTEREST = {
@@ -70,6 +73,19 @@ class EnvConfig:
     # Task 5: what an assisted vessel does. "bc" = fixed manoeuvre from
     # assistance_direction (original behaviour); "rule" / "vo" = planning operator.
     controller: str = "bc"
+    # Where scenarios come from. "real" = BC journeys from the data (original behaviour, only ~26 distinct
+    # 10-ship sets, almost no collisions). "synthetic" = generated crossing routes
+    # (training/synthetic_scenarios.py), unlimited and with real conflicts. "mixed" = alternate by seed.
+    # Every scenario seed still gives the same fleet size, so the action space stays fixed.
+    scenario_source: str = "real"
+    # Synthetic difficulty: comma-separated SPREAD_S:OFFSET_M pairs that take turns across seeds.
+    # Smaller numbers = more simultaneous, closer conflicts. The vessel count is fleet_size.
+    synthetic_spec: str = DEFAULT_SPEC
+
+    def __post_init__(self):
+        if self.scenario_source not in SOURCES:
+            raise ValueError(f"scenario_source must be one of {SOURCES}, got {self.scenario_source!r}.")
+        parse_spec(self.synthetic_spec)  # fail early on a malformed spec
 
     def reward_weights(self) -> RewardWeights:
         return RewardWeights(
@@ -96,13 +112,19 @@ def shared_bc_policy() -> FrozenBCPolicy:
 def build_env(config: EnvConfig, scenario_seed: int, policy: Optional[FrozenBCPolicy] = None) -> FleetAllocationEnv:
     """One FleetAllocationEnv for one journey selection."""
     policy = policy or shared_bc_policy()
-    trajectories, timestamps, vessel_ids = load_bc_scenario(
-        policy,
-        fleet_size=config.fleet_size,
-        seed=scenario_seed,
-        min_start_distance=config.min_start_distance_m,
-        split=config.split,
-    )
+    if uses_synthetic(config.scenario_source, scenario_seed):
+        spread_s, offset_m = setting_for(config.scenario_source, config.synthetic_spec, scenario_seed)
+        trajectories, timestamps, vessel_ids = make_crossing_scenario(
+            config.fleet_size, scenario_seed, spread_s=spread_s, offset_m=offset_m, dt=config.dt,
+        )
+    else:
+        trajectories, timestamps, vessel_ids = load_bc_scenario(
+            policy,
+            fleet_size=config.fleet_size,
+            seed=scenario_seed,
+            min_start_distance=config.min_start_distance_m,
+            split=config.split,
+        )
     fleet = FleetSimulator(
         trajectories=trajectories,
         timestamps=timestamps,
@@ -172,7 +194,11 @@ def build_unique_envs(
         seen.add(env.ship_set)
         envs.append(env)
     if not envs:
-        raise ValueError("No scenario found that is not excluded.")
+        raise ValueError(
+            "No scenario found that is not excluded: every reachable ship set was already used by the "
+            "excluded checkpoints. For run_benchmark.py try --exclude-scope train, or --exclude-from <word> "
+            "to keep out only some checkpoints' sets, or evaluate fewer checkpoints at once."
+        )
     if len(envs) < count:
         print(f"[scenarios] only {len(envs)} distinct ship sets available (asked {count}).")
     return envs
@@ -180,7 +206,7 @@ def build_unique_envs(
 
 def build_heldout_envs(config: EnvConfig, train_sets, count: int, start_seed: int = 10_000):
     """Evaluation scenarios: the val split if it can hold the fleet, else unseen train combinations."""
-    if config.fleet_size <= 4:
+    if config.fleet_size <= 4 and config.scenario_source == "real":
         val = EnvConfig(**{**config.to_dict(), "split": "val"})
         return build_unique_envs(val, count, start_seed), "val"
     return build_unique_envs(config, count, start_seed, exclude_sets=train_sets), "train-unseen"

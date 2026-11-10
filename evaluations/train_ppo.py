@@ -27,6 +27,7 @@ from evaluations.ppo import PPOAgent, PPOConfig, PPOPolicy, compute_gae
 from training.evaluation import evaluate, summarise  
 from training.features import ObservationEncoder  
 from training.scenarios import EnvConfig, ScenarioPool, build_heldout_envs  
+from training.synthetic_scenarios import DEFAULT_SPEC  # noqa: E402
 
 
 def parse_args(argv=None):
@@ -34,6 +35,11 @@ def parse_args(argv=None):
     p.add_argument("--run-name", default=None)
     p.add_argument("--fleet-size", type=int, default=10)
     p.add_argument("--min-start-distance", type=float, default=800.0)
+    p.add_argument("--scenario-source", choices=("real", "synthetic", "mixed"), default="real",
+                   help="real = BC journeys from the data; synthetic = generated crossing routes; "
+                        "mixed = alternate by seed (see training/synthetic_scenarios.py)")
+    p.add_argument("--synthetic-spec", default=DEFAULT_SPEC, metavar="S:O[,S:O...]",
+                   help="synthetic difficulty as SPREAD_S:OFFSET_M pairs that take turns; smaller = denser conflicts")
     p.add_argument("--maneuver", choices=("right", "left", "stop"), default="right")
     p.add_argument("--controller", choices=("bc", "rule", "vo"), default="bc",
                    help="bc = fixed --maneuver; rule / vo = Task 5 planning operator")
@@ -86,6 +92,8 @@ def main(argv=None):
         reward_near_miss=args.w_near_miss,
         reward_intervention=args.w_intervention,
         controller=args.controller,
+        scenario_source=args.scenario_source,
+        synthetic_spec=args.synthetic_spec,
     )
     print(f"Building up to {args.train_scenarios} training scenarios (fleet={args.fleet_size})...")
     pool = ScenarioPool(env_config, args.train_scenarios, start_seed=args.seed * 1000, rng_seed=args.seed)

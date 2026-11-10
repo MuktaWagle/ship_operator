@@ -71,6 +71,11 @@ def parse_args(argv=None):
     p.add_argument("--fleet-size", type=int, default=10)
     p.add_argument("--min-start-distance", type=float, default=800.0)
     p.add_argument("--maneuver", choices=("right", "left", "stop"), default="right")
+    p.add_argument("--scenario-source", choices=("real", "synthetic", "mixed"), default=None,
+                   help="where scenarios come from; default: the checkpoint's own setting (real if none). "
+                        "Use real on a synthetic-trained checkpoint for the realistic test set.")
+    p.add_argument("--synthetic-spec", default=None, metavar="S:O[,S:O...]",
+                   help="synthetic difficulty as SPREAD_S:OFFSET_M pairs; default: the checkpoint's own")
     p.add_argument("--controller", choices=("bc", "rule", "vo"), default=None,
                    help="what an assisted vessel does: bc = fixed --maneuver, rule / vo = Task 5 planning "
                         "operator. Default: the checkpoint's own setting (bc if there is none). "
