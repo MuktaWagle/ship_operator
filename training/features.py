@@ -46,6 +46,7 @@ class ObservationEncoder:
         warning_distance_m: float = 500.0,
         risk_horizon_s: float = 300.0,
         map_diagonal_m: float = 10250.0,
+        benefit_features: bool = False,
     ):
         if num_vessels < 1:
             raise ValueError("num_vessels must be positive.")
@@ -57,9 +58,11 @@ class ObservationEncoder:
         self.warning_distance_m = float(warning_distance_m)
         self.risk_horizon_s = float(risk_horizon_s)
         self.map_diagonal_m = float(map_diagonal_m)
+        self.benefit_features = bool(benefit_features)
 
     @classmethod
-    def for_env(cls, env, *, risk_features: bool = True, risk_horizon_s: float = 300.0):
+    def for_env(cls, env, *, risk_features: bool = True, risk_horizon_s: float = 300.0,
+                benefit_features: bool = False):
         """Build an encoder whose scales match a FleetAllocationEnv."""
         return cls(
             env.num_vessels,
@@ -67,6 +70,7 @@ class ObservationEncoder:
             warning_distance_m=env.warning_distance_m,
             risk_horizon_s=risk_horizon_s,
             map_diagonal_m=env.map_diagonal,
+            benefit_features=benefit_features,
         )
 
     @property
@@ -75,13 +79,15 @@ class ObservationEncoder:
 
     @property
     def dim(self) -> int:
-        return self.num_vessels * (self.per_ship_dim + 1) + OPERATOR_FEATURES
+        extra = (self.num_vessels + 1) if self.benefit_features else 0
+        return self.num_vessels * (self.per_ship_dim + 1) + OPERATOR_FEATURES + extra
 
     def encode(
         self,
         observation: Dict[str, np.ndarray],
         fleet_state: Optional[Dict[str, Any]] = None,
         vessel_ids=None,
+        benefit: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """Return the flat vector.
 
@@ -106,11 +112,14 @@ class ObservationEncoder:
             risk = self.risk_matrix(fleet_state, vessel_ids)
             ships = np.concatenate([ships, risk], axis=1)
 
-        return np.concatenate([
-            ships.reshape(-1),
-            nearest.reshape(-1),
-            operator.reshape(-1),
-        ]).astype(np.float32)
+        parts = [ships.reshape(-1), nearest.reshape(-1), operator.reshape(-1)]
+        if self.benefit_features:
+            if benefit is None or len(benefit) != self.num_vessels + 1:
+                raise ValueError(
+                    "benefit_features=True needs benefit=gain_features(...) of length N + 1."
+                )
+            parts.append(np.asarray(benefit, dtype=np.float32))
+        return np.concatenate(parts).astype(np.float32)
 
     def risk_matrix(self, fleet_state: Dict[str, Any], vessel_ids) -> np.ndarray:
         """Per-vessel [dcpa, tcpa, proximity, goal_dist], each in [0, 1].

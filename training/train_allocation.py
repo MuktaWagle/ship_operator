@@ -21,7 +21,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from training.dqn import DQNConfig, MaskedDQNAgent  
-from training.evaluation import DQNPolicy, evaluate, summarise  
+from training.evaluation import DQNPolicy, evaluate, prepare_input, summarise  
 from training.features import ObservationEncoder 
 from training.scenarios import EnvConfig, ScenarioPool, build_heldout_envs 
 from training.synthetic_scenarios import DEFAULT_SPEC  # noqa: E402
@@ -47,6 +47,14 @@ def parse_args(argv=None):
     p.add_argument("--eval-every", type=int, default=5_000)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--no-risk-features", action="store_true", help="train on the raw Task 3 observation only")
+    # benefit gate (training/benefit.py)
+    p.add_argument("--benefit-gate", action="store_true",
+                   help="use the model look-ahead: mask ships whose dispatch is not predicted to pay and "
+                        "add the predicted gains as input features")
+    p.add_argument("--benefit-horizon", type=int, default=30, help="look-ahead steps per rollout")
+    p.add_argument("--benefit-margin", type=float, default=0.0, help="a dispatch must be predicted to gain more than this")
+    p.add_argument("--benefit-activation", type=float, default=1000.0, help="only evaluate ships with predicted CPA below this (m)")
+    p.add_argument("--no-gate-mask", action="store_true", help="keep the gain features but do not mask non-paying ships")
     # operator / reward
     p.add_argument("--budget", type=float, default=300.0)
     p.add_argument("--duration", type=float, default=20.0)
@@ -101,7 +109,18 @@ def main(argv=None):
     if args.fleet_size >= 5 and len(pool.envs) == 1:
         print("WARNING: only one distinct scenario exists for this fleet size; the agent can only memorise it.")
 
-    encoder = ObservationEncoder.for_env(pool.envs[0], risk_features=not args.no_risk_features)
+    encoder = ObservationEncoder.for_env(
+        pool.envs[0], risk_features=not args.no_risk_features, benefit_features=args.benefit_gate,
+    )
+    estimator = benefit_config = None
+    if args.benefit_gate:
+        from training.benefit import BenefitConfig, BenefitEstimator
+
+        benefit_config = BenefitConfig(
+            horizon=args.benefit_horizon, margin=args.benefit_margin,
+            activation_m=args.benefit_activation, gate=not args.no_gate_mask,
+        )
+        estimator = BenefitEstimator(benefit_config)
     dqn_config = DQNConfig(
         gamma=args.gamma,
         lr=args.lr,
@@ -120,7 +139,12 @@ def main(argv=None):
 
     checkpoint_extra = {
         "env_config": env_config.to_dict(),
-        "encoder": {"risk_features": encoder.risk_features, "risk_horizon_s": encoder.risk_horizon_s},
+        "encoder": {
+            "risk_features": encoder.risk_features,
+            "risk_horizon_s": encoder.risk_horizon_s,
+            "benefit_features": encoder.benefit_features,
+        },
+        "benefit": benefit_config.to_dict() if benefit_config else None,
         "train_seeds": [env.scenario_seed for env in pool.envs],
         "train_ship_sets": pool.ship_sets,
         "eval_split": eval_split,
@@ -148,16 +172,14 @@ def main(argv=None):
         while agent.env_steps < args.total_steps:
             observation, info = pool.reset()
             env = pool.current
-            x = encoder.encode(observation, info["fleet_state"], env.vessel_ids)
-            mask = info["action_mask"]
+            x, mask = prepare_input(encoder, estimator, observation, info, env)
             ep = dict(reward=0.0, collisions=0, near_misses=0, completed=0, interventions=0)
             losses, qs = [], []
 
             while True:
                 action = agent.act(x, mask, explore=True)
                 observation, reward, terminated, truncated, info = env.step(action)
-                x_next = encoder.encode(observation, info["fleet_state"], env.vessel_ids)
-                mask_next = info["action_mask"]
+                x_next, mask_next = prepare_input(encoder, estimator, observation, info, env)
                 stats = agent.observe(x, mask, action, reward, x_next, mask_next, terminated, truncated)
                 if stats:
                     losses.append(stats["loss"])
@@ -193,7 +215,7 @@ def main(argv=None):
 
             if agent.env_steps >= next_eval or agent.env_steps >= args.total_steps:
                 next_eval += args.eval_every
-                summary = summarise(evaluate(eval_envs, DQNPolicy(agent, encoder)))
+                summary = summarise(evaluate(eval_envs, DQNPolicy(agent, encoder, estimator)))
                 summary.update(env_steps=agent.env_steps, episode=episode)
                 if eval_writer is None:
                     eval_writer = csv.DictWriter(eval_log, fieldnames=list(summary))

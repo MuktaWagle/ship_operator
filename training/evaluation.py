@@ -8,16 +8,46 @@ from training.dqn import MaskedDQNAgent
 from training.features import ObservationEncoder
 
 
-class DQNPolicy:
-    """Wrap a trained agent with the same call signature as the baselines."""
+def prepare_input(encoder: ObservationEncoder, estimator, observation, info, env):
+    """Network input and action mask for one decision.
 
-    def __init__(self, agent: MaskedDQNAgent, encoder: ObservationEncoder):
+    Without a benefit estimator this is the plain encoder and the tracker's mask.
+    With one (training/benefit.py) the predicted dispatch gains are appended to the
+    input and, if gating is on, non-paying ships are removed from the mask.
+    """
+    if estimator is None:
+        x = encoder.encode(observation, info["fleet_state"], env.vessel_ids)
+        return x, np.asarray(info["action_mask"], dtype=bool)
+    from training.benefit import gain_features
+
+    gains, idle_return, mask = estimator(env, info)
+    benefit = gain_features(gains, idle_return, env.reward_weights.near_miss) if encoder.benefit_features else None
+    x = encoder.encode(observation, info["fleet_state"], env.vessel_ids, benefit=benefit)
+    return x, mask
+
+
+class DQNPolicy:
+    """Wrap a trained agent with the same call signature as the baselines.
+
+    If the checkpoint was trained with the benefit gate (``agent.extra["benefit"]``),
+    the same gate and gain features are rebuilt here, so evaluation scripts such as
+    evaluations/run_benchmark.py need no changes.
+    """
+
+    def __init__(self, agent: MaskedDQNAgent, encoder: ObservationEncoder, estimator=None):
         self.agent = agent
         self.encoder = encoder
+        if estimator is None:
+            benefit = getattr(agent, "extra", {}).get("benefit")
+            if benefit:
+                from training.benefit import BenefitConfig, BenefitEstimator
+
+                estimator = BenefitEstimator(BenefitConfig(**benefit))
+        self.estimator = estimator
 
     def __call__(self, observation, info, env):
-        x = self.encoder.encode(observation, info["fleet_state"], env.vessel_ids)
-        return self.agent.act(x, info["action_mask"], explore=False)
+        x, mask = prepare_input(self.encoder, self.estimator, observation, info, env)
+        return self.agent.act(x, mask, explore=False)
 
 
 def run_episode(env, policy: Callable, seed: int) -> Dict[str, float]:
