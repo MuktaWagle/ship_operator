@@ -31,6 +31,8 @@ def parse_args(argv=None):
     p.add_argument("--run-name", default=None)
     p.add_argument("--fleet-size", type=int, default=10)
     p.add_argument("--min-start-distance", type=float, default=800.0)
+    p.add_argument("--controller", choices=("bc", "rule", "vo"), default="bc",
+                   help="bc = fixed --maneuver; rule / vo = Task 5 planning operator")
     p.add_argument("--maneuver", choices=("right", "left", "stop"), default="right", help="fixed assistance manoeuvre (until Task 5 controller exists)")
     p.add_argument("--max-steps", type=int, default=300)
     p.add_argument("--train-scenarios", type=int, default=12, help="number of journey selections in the training pool")
@@ -82,6 +84,7 @@ def main(argv=None):
         reward_collision=args.w_collision,
         reward_near_miss=args.w_near_miss,
         reward_intervention=args.w_intervention,
+        controller=args.controller,
     )
     print(f"Building up to {args.train_scenarios} distinct training scenarios (fleet={args.fleet_size})...")
     pool = ScenarioPool(env_config, args.train_scenarios, start_seed=args.seed * 1000, rng_seed=args.seed)

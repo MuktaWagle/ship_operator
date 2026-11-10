@@ -1,10 +1,11 @@
 """Monte-Carlo tree search allocator"""
 
+import copy
 import math
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 
@@ -47,13 +48,18 @@ class ModelParams:
     w_near_miss: float
     w_intervention: float
     risk_horizon_s: float
+    # Task 5 planning operator (direction == "avoid"): the model calls a copy of the planner
+    # for the assisted vessel instead of applying a fixed turn. None for left/right/stop.
+    planner: Any = None
+    limits: Any = None
+    plan_cache: Any = None
 
 
 class ModelState:
     __slots__ = (
         "pos", "heading", "speed", "goal", "active", "status", "prep", "assist",
         "assigned", "budget", "takeover", "op_left", "saved_speed", "near_pairs",
-        "coll_pairs", "t",
+        "coll_pairs", "t", "plan_mem",
     )
 
     def copy(self) -> "ModelState":
@@ -74,15 +80,38 @@ class ModelState:
         new.near_pairs = self.near_pairs.copy()
         new.coll_pairs = self.coll_pairs.copy()
         new.t = self.t
+        new.plan_mem = self.plan_mem
         return new
 
 
-def params_from_env(env, config: ModelMCTSConfig) -> ModelParams:
+def _model_planner(env, shared: dict):
+    """A private copy of the env's planner plus a plan cache, reused across searches.
+
+    The copy keeps the live operator's memory untouched. The cache is dropped if the live
+    planner's configuration changes (e.g. the policy is reused with a different planner).
+    """
+    live = env.controller.planner
+    signature = (type(live).__name__, tuple(sorted(
+        (k, repr(v)) for k, v in vars(live).items() if not k.startswith("_")
+    )))
+    if shared.get("signature") != signature:
+        shared["signature"] = signature
+        shared["planner"] = copy.deepcopy(live)
+        shared["planner"].reset()
+        shared["cache"] = {}
+    return shared["planner"], env.controller.limits, shared["cache"]
+
+
+def params_from_env(env, config: ModelMCTSConfig, shared: Optional[dict] = None) -> ModelParams:
     tracker = env.tracker
     weights = env.reward_weights
     direction = env.assistance_direction
     dt = float(env.fleet.dt)
-    if direction == "stop":
+    planner = limits = cache = None
+    if direction == "avoid":
+        turn = 0.0
+        planner, limits, cache = _model_planner(env, shared if shared is not None else {})
+    elif direction == "stop":
         turn = 0.0
     else:
         turn = math.radians(env.assistance_turn_rate_deg) * dt * (1 if direction == "left" else -1)
@@ -93,6 +122,7 @@ def params_from_env(env, config: ModelMCTSConfig) -> ModelParams:
         direction=direction, turn_rad=turn,
         w_collision=float(weights.collision), w_near_miss=float(weights.near_miss),
         w_intervention=float(weights.intervention), risk_horizon_s=config.risk_horizon_s,
+        planner=planner, limits=limits, plan_cache=cache,
     )
 
 
@@ -129,6 +159,9 @@ def build_state(env, info) -> ModelState:
         s.saved_speed = float(s.speed[s.assigned])
 
     p = env._mcts_params
+    s.plan_mem = None
+    if s.takeover and p.planner is not None:
+        s.plan_mem = env.controller.planner.snapshot(ids[s.assigned])  # live memory of the running takeover
     s.coll_pairs, s.near_pairs = _pair_sets(s.pos, s.active, p)
     s.t = 0
     return s
@@ -142,6 +175,38 @@ def _release(s: ModelState):
         s.speed[a] = s.saved_speed
     s.takeover = False
     s.op_left = 0.0
+
+
+def _planned_move(p: ModelParams, s: ModelState, a: int):
+    """Let the planner choose this step's turn and speed for the assisted vessel `a`.
+
+    Other vessels are treated as constant-velocity (the planner's own assumption). Identical
+    situations are answered from a cache, because many rollouts share the same prefix.
+    """
+    steps_left = max(1, int(math.ceil(s.op_left / p.dt - 1e-9)))
+    idx = np.flatnonzero(s.active)
+    table = np.round(np.column_stack((s.pos, s.heading, s.speed))[idx], 2)
+    key = (a, steps_left, s.plan_mem, idx.tobytes(), table.tobytes())
+    hit = p.plan_cache.get(key)
+    if hit is None:
+        ships = {
+            int(i): {
+                "x": float(s.pos[i, 0]), "y": float(s.pos[i, 1]),
+                "heading": float(s.heading[i]), "speed": float(s.speed[i]),
+                "goal": (float(s.goal[i, 0]), float(s.goal[i, 1])),
+            }
+            for i in idx
+        }
+        others = [ships[int(i)] for i in idx if i != a]
+        p.planner.restore(a, s.plan_mem)
+        turn, speed = p.planner.plan(a, ships[a], others, p.limits, steps_left)
+        hit = (float(turn), float(speed), p.planner.snapshot(a))
+        if len(p.plan_cache) > 200_000:
+            p.plan_cache.clear()
+        p.plan_cache[key] = hit
+    turn, speed, s.plan_mem = hit
+    s.heading[a] = (s.heading[a] + turn + math.pi) % (2.0 * math.pi) - math.pi
+    s.speed[a] = speed
 
 
 def model_step(p: ModelParams, s: ModelState, action: int):
@@ -162,12 +227,16 @@ def model_step(p: ModelParams, s: ModelState, action: int):
         s.op_left = s.assist
         s.saved_speed = float(s.speed[a]) if s.speed[a] > 0 else 3.0
         s.speed[a] = 0.0 if p.direction == "stop" else s.saved_speed
+        s.plan_mem = None  # a new takeover starts with a clean planner memory
 
     if s.takeover and s.assigned >= 0 and s.active[s.assigned]:
         a = s.assigned
-        s.heading[a] += p.turn_rad
-        if p.direction == "stop":
-            s.speed[a] = 0.0
+        if p.planner is not None:
+            _planned_move(p, s, a)
+        else:
+            s.heading[a] += p.turn_rad
+            if p.direction == "stop":
+                s.speed[a] = 0.0
 
     was_active = s.active.copy()
     velocity = s.speed[:, None] * np.stack([np.cos(s.heading), np.sin(s.heading)], axis=1)
@@ -240,12 +309,13 @@ class ModelMCTSPolicy:
         self.cfg = config or ModelMCTSConfig()
         self.rng = np.random.default_rng(self.cfg.seed)
         self.searches = 0
+        self._shared = {}  # planner copy + plan cache, used when the operator is a planner
 
     def __call__(self, observation, info, env):
         mask = np.asarray(info["action_mask"], dtype=bool)
         if not mask[1:].any():
             return 0
-        env._mcts_params = params_from_env(env, self.cfg)
+        env._mcts_params = params_from_env(env, self.cfg, self._shared)
         params = env._mcts_params
         root_state = build_state(env, info)
 

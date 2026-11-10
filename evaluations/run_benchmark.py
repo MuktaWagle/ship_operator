@@ -73,12 +73,16 @@ def parse_args(argv=None):
     p.add_argument("--fleet-size", type=int, default=10)
     p.add_argument("--min-start-distance", type=float, default=800.0)
     p.add_argument("--maneuver", choices=("right", "left", "stop"), default="right")
+    p.add_argument("--controller", choices=("bc", "rule", "vo"), default=None,
+                   help="what an assisted vessel does: bc = fixed --maneuver, rule / vo = Task 5 planning "
+                        "operator. Default: the checkpoint's own setting (bc if there is none). "
+                        "Given explicitly, it overrides the checkpoint's setting for every policy.")
     p.add_argument("--max-steps", type=int, default=300)
     p.add_argument("--budget", type=float, default=300.0)
-    p.add_argument("--duration", type=float, default=60.0)
-    p.add_argument("--delay", type=float, default=10.0)
+    p.add_argument("--duration", type=float, default=20.0)
+    p.add_argument("--delay", type=float, default=0.0)
     # MCTS
-    p.add_argument("--mcts-rollouts", type=int, default=150)
+    p.add_argument("--mcts-rollouts", type=int, default=60)
     p.add_argument("--mcts-horizon", type=int, default=40)
     p.add_argument("--mcts-depth", type=int, default=12)
     p.add_argument("--mcts-top-k", type=int, default=3)
@@ -99,17 +103,21 @@ def load_checkpoints(args):
 
 
 def base_env_config(args, loaded):
+    controller = getattr(args, "controller", None)  # None = keep the checkpoint's own setting
     if loaded:
         config = EnvConfig(**loaded[0][3]["env_config"])
         for label, _, _, extra in loaded[1:]:
             other = EnvConfig(**extra["env_config"])
             if other.fleet_size != config.fleet_size:
                 raise SystemExit(f"{label} was trained with fleet size {other.fleet_size}, expected {config.fleet_size}.")
+        if controller is not None:
+            config = EnvConfig(**{**config.to_dict(), "controller": controller})
         return config
     return EnvConfig(
         fleet_size=args.fleet_size, min_start_distance_m=args.min_start_distance,
         assistance_direction=args.maneuver, max_steps=args.max_steps,
         total_budget_s=args.budget, duration_s=args.duration, delay_s=args.delay,
+        controller=controller or "bc",
     )
 
 
