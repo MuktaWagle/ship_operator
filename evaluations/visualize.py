@@ -85,7 +85,7 @@ def parse_args(argv=None):
     p.add_argument("--duration", type=float, default=20.0)
     p.add_argument("--delay", type=float, default=0.0)
     # MCTS
-    p.add_argument("--mcts-rollouts", type=int, default=150)
+    p.add_argument("--mcts-rollouts", type=int, default=60)
     p.add_argument("--mcts-horizon", type=int, default=40)
     p.add_argument("--mcts-depth", type=int, default=12)
     p.add_argument("--mcts-top-k", type=int, default=3)
