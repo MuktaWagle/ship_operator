@@ -1,30 +1,30 @@
 {
   "greedy_highest_risk": {
-    "scenarios": 8,
-    "gain_mean": -10.0,
-    "gain_std": 2.6726124191242437,
-    "gain_se": 0.9449111825230679,
+    "scenarios": 15,
+    "gain_mean": -9.666666666666666,
+    "gain_std": 2.2886885410853175,
+    "gain_se": 0.5909368402852789,
     "win_rate": 0.0
   },
   "dqn": {
-    "scenarios": 8,
-    "gain_mean": -5.25,
-    "gain_std": 5.800246300189083,
-    "gain_se": 2.050696745707942,
-    "win_rate": 0.0
+    "scenarios": 15,
+    "gain_mean": -5.066666666666666,
+    "gain_std": 6.850095585012631,
+    "gain_se": 1.7686870747121914,
+    "win_rate": 0.13333333333333333
   },
   "ppo": {
-    "scenarios": 8,
-    "gain_mean": -2.5,
-    "gain_std": 4.6291004988627575,
-    "gain_se": 1.6366341767699428,
+    "scenarios": 15,
+    "gain_mean": -6.6,
+    "gain_std": 6.10386294547501,
+    "gain_se": 1.5760106356904842,
     "win_rate": 0.0
   },
   "mcts": {
-    "scenarios": 8,
-    "gain_mean": 2.5,
-    "gain_std": 2.390457218668787,
-    "gain_se": 0.8451542547285165,
-    "win_rate": 0.875
+    "scenarios": 15,
+    "gain_mean": 0.4,
+    "gain_std": 2.0632844828435215,
+    "gain_se": 0.5327377627027428,
+    "win_rate": 0.6
   }
 }
