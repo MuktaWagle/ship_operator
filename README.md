@@ -1,4 +1,20 @@
-# ShipNaviSim — BC Navigation and Fleet Operator Demo
+# Remote Assistance Allocation for Autonomous Vessels
+
+Budget-constrained remote assistance allocation for autonomous vessels: Double DQN with a counterfactual benefit gate, benchmarked against Idle, Greedy, PPO and MCTS.
+
+A single remote operator supervises a fleet of autonomous vessels but has only a limited assistance-time budget. At each simulation step, the allocator decides **whether to intervene and which vessel to assist**. The goal is to reduce collisions and near misses while using as little operator time as possible.
+
+- **Fleet simulator:** a shared-world simulation (`src/fleet_simulator.py`) built on ShipNaviSim, where all vessels move together. Each vessel is steered by a frozen behavioural-cloning (BC) policy with no awareness of other ships.
+- **Operator and budget tracker:** `src/operator_tracker.py` handles availability (Available, Preparing, Assisting), the assistance budget, and action masking.
+- **Allocation environment:** `src/allocation_env.py` is a Gymnasium environment with the reward `w_g·completed − w_c·collisions − w_m·near misses − w_h·interventions`.
+- **Intervention controllers:** during assistance, a fixed-turn, rule-based, or velocity-obstacle-inspired planner temporarily replaces BC navigation for the selected vessel.
+- **Allocators:** a masked Double DQN with a dueling head and n-step returns, and a gated DQN that uses a short model look-ahead to remove dispatches predicted not to pay.
+- **Baselines and benchmarking:** Idle, Greedy highest-risk, action-masked PPO and MCTS, compared on identical unseen scenarios with reward, safety, intervention and latency metrics (`evaluations/`).
+- **Demos:** Pygame viewers for manual operator control, the live budget HUD, and side-by-side policy comparison.
+
+This is a simulation study. It does not establish human performance or navigation-rule compliance.
+
+# ShipNaviSim Extension: BC Navigation and Fleet Operator Demo
 
 A shared-world vessel simulation with behavioural-cloning (BC) navigation and manual operator intervention. Autonomous motion uses the frozen BC policy from ShipNaviSim; the operator can temporarily take over one ship while monitoring fleet separation.
 
