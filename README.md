@@ -11,7 +11,8 @@ A single remote operator supervises a fleet of autonomous vessels but has only a
 - **Allocators:** a masked Double DQN with a dueling head and n-step returns, and a gated DQN that uses a short model look-ahead to remove dispatches predicted not to pay.
 - **Baselines and benchmarking:** Idle, Greedy highest-risk, action-masked PPO and MCTS, compared on identical unseen scenarios with reward, safety, intervention and latency metrics (`evaluations/`).
 - **Demos:** Pygame viewers for manual operator control, the live budget HUD, and side-by-side policy comparison.
-
+- **Simulation videos:** `simulations/` folder holds recordings of the policy viewer on unseen scenarios, showing Idle, Greedy, PPO, MCTS, DQN and gated DQN side by side. Rings mark ships within 500 m (red, blinking), collisions (dark red), ships under assistance (orange) and the operator preparing (yellow).
+  
 This is a simulation study. It does not establish human performance or navigation-rule compliance.
 
 # ShipNaviSim Extension: BC Navigation and Fleet Operator Demo
@@ -121,7 +122,7 @@ Last-step minima assume linear motion between step endpoints. They are retrospec
 | `requirements.txt`, `environment.yml` | Installation dependencies |
 | `LICENSE` | Original project licence, retained unchanged |
 
-## Simulator interface for teammates
+## Simulator interface
 
 Construct `FleetSimulator` using trajectories (columns x, y, speed, heading), timestamps, unique vessel IDs, region, dt and maximum steps. Timestamps must start together and match dt.
 
