@@ -300,3 +300,127 @@ Minari is imported only when its optional export helper is called. Further work 
 - Learned operator maneuver
 - Intervention logs (observability)
 - Trained allocation policy
+
+
+## Benchmarking and Evaluating policies (`evaluations/`)
+
+### Files
+
+| File | Purpose |
+|---|---|
+| `evaluations/policies.py` | Greedy highest-risk policy |
+| `evaluations/ppo.py` | Action-masked PPO agent (actor-critic, GAE, clipped objective, save/load) |
+| `evaluations/train_ppo.py` | PPO training script |
+| `evaluations/mcts.py` | Model-based Monte-Carlo tree search allocator |
+| `evaluations/run_benchmark.py` | Compares all policies on the same unseen scenarios; writes tables, latency and plots |
+| `evaluations/visualize.py` | Pygame viewer to watch and switch between policies on the same scenario |
+| `runs/<run-name>/` | Training outputs (checkpoints and logs) |
+| `evaluations/results/<name>/` | Benchmark outputs |
+
+### Policies
+
+| Policy | Type | How it decides |
+|---|---|---|
+| Idle | Reference | Never dispatches; every other policy is compared with it |
+| Greedy Highest Risk | Rule | Assumes constant velocity and predicts each ship's closest-approach distance (DCPA) to any neighbour within 300 s; assists the ship with the smallest DCPA whenever an action is valid (ties broken by closest-approach time). Optional `threshold_m` dispatches only below that distance |
+| DQN (dqn_gate / dqn_no_gate) | Learned | Masked DQN from `training/`, trained with and without the benefit gate; |
+| PPO | Learned | Action-masked PPO; invalid actions are given a logit of −1e9 so they are never chosen; greedy (argmax) at evaluation |
+| MCTS | Planning | Builds an internal fleet model from observable state and runs UCT search over idle + the 3 riskiest ships |
+
+**Greedy and MCTS need no training.**
+
+**PPO details:**
+- Separate actor and critic MLPs (256 → 256, tanh, orthogonal init).
+- GAE with γ = 0.99 and λ = 0.95, over rollouts that may span episodes. On a time-limit truncation, the next state's value is bootstrapped.
+- Clip 0.2, 4 epochs, minibatch 256, 2048-step rollouts, entropy 0.01, value weight 0.5, gradient clip 0.5, Adam with lr 3e-4.
+- Evaluated on held-out scenarios every 5,000 steps; `best.pt` keeps the best held-out reward.
+- Uses the same scenarios, encoder, reward weights and held-out evaluation as the DQN, so the two are directly comparable.
+
+**MCTS details:**
+- Stays idle without searching unless an available ship's predicted closest-approach distance is below 1000 m. This keeps most steps cheap.
+- Otherwise runs 150 rollouts: tree depth 12, horizon 40 steps, γ = 0.99, exploration constant 2.0.
+- In the rollout default policy, the riskiest ship is dispatched with probability 0.15 if it is inside the warning distance.
+- Returns the most visited root action.
+- The internal step follows the same order as `FleetAllocationEnv.step`. With a Task 5 planning operator (`--controller rule/vo`), it uses a private, cached copy of the planner, so the live operator's memory is not changed.
+
+### Training
+
+PPO (one run per seed):
+
+```bat
+python -m evaluations.train_ppo --run-name ppo_s0 --seed 0
+python -m evaluations.train_ppo --run-name ppo_s1 --seed 1
+```
+
+Outputs go to `runs/<run-name>/`: `config.json`, `train_episodes.csv`, `eval_history.csv`, `best.pt` and `final.pt`.
+
+| PPO setting | Default | Flag |
+|---|---:|---|
+| Training steps | 60000 | `--total-steps` |
+| Evaluation interval | 5000 | `--eval-every` |
+| Training / held-out scenarios | 12 / 4 | `--train-scenarios`, `--eval-scenarios` |
+| Learning rate, γ, λ, clip | 3e-4, 0.99, 0.95, 0.2 | `--lr`, `--gamma`, `--lam`, `--clip` |
+| Epochs, minibatch, rollout | 4, 256, 2048 | `--epochs`, `--minibatch-size`, `--rollout-steps` |
+| Entropy, value weight | 0.01, 0.5 | `--ent-coef`, `--vf-coef` |
+| Hidden layers | 256 256 | `--hidden` |
+| Risk features off | – | `--no-risk-features` |
+| Scenario / operator settings | real, bc, right | `--scenario-source`, `--controller`, `--maneuver` |
+
+All checkpoints compared together must use the same fleet size.
+
+### Benchmark: `run_benchmark.py`
+
+Runs Idle, Greedy, every `--dqn` / `--ppo` checkpoint and (with `--mcts`) MCTS on the **same unseen scenarios**. For fleets over 4 ships, it uses ship combinations that none of the loaded checkpoints used for training or held-out evaluation. Each checkpoint is reported and plotted **as its own series**, so `DQN (dqn_gate)` and `DQN (dqn_no_gate)` appear side by side.
+
+Outputs in `evaluations/results/<name>/`:
+
+| File | Content |
+|---|---|
+| `summary.json`, `summary.md`, `summary_by_checkpoint.md` | Mean ± SD per policy and per checkpoint |
+| `episodes.csv` | One row per policy × episode |
+| `paired_vs_idle.json` | Reward gain over idle on matching scenarios (mean, SD, SE, win rate) |
+| `latency.csv`, `latency.json` | Wall-clock time per episode and per decision |
+| `comparison.png` | Reward, collisions, near-misses, completed, interventions, invalid actions |
+| `episode_distributions.png` | Box plots with every episode shown |
+| `scenario_reward_heatmap.png` | Reward per policy × scenario seed |
+| `paired_reward_gain.png` | Gain over idle with win rate |
+| `safety_vs_completion.png` | Collisions + near-misses against completed journeys |
+| `intervention_efficiency.png` | Completed journeys per intervention |
+| `latency.png` | Time to complete a simulation (decision vs simulation time) and per-decision latency for Greedy, both DQNs, PPO and MCTS |
+
+Latency is real wall-clock time on the machine running the benchmark. MCTS has a wide spread: it is instant when it skips the search and slow when it searches.
+
+Useful flags: `--scenarios` (default 6), `--seed-offset` (20000), `--split train/val/test`, `--name` (results folder), `--baselines`, `--exclude-scope`, `--exclude-from`, and the MCTS settings `--mcts-rollouts 150`, `--mcts-horizon 40`, `--mcts-depth 12`, `--mcts-top-k 3`, `--mcts-activation 1000`. Plots require `matplotlib`.
+
+### Viewer: `visualize.py`
+
+Shows the map (trails, goals, rings) and a live panel: reward, collisions, near-misses, budget, operator state, and the score of every policy that has finished the current scenario.
+
+| Key | Behaviour |
+|---|---|
+| 1–9 | Switch to that policy and restart the scenario |
+| LEFT / RIGHT | Previous / next policy |
+| N / P | Next / previous scenario |
+| R | Restart the scenario |
+| UP / DOWN | Faster / slower simulation |
+| A | Toggle auto-cycle |
+| SPACE | Pause / resume |
+| ESC | Quit |
+
+Red blinking ring: closer than 500 m. Dark red ring: collision. Orange ring: ship under assistance. Yellow ring: operator preparing (delay phase). "THINKING..." means MCTS is searching.
+
+Useful flags: `--scenarios` (default 4), `--speed` (3 steps/s), `--start-policy NAME`, `--autoplay`, plus the same environment and MCTS flags as the benchmark.
+
+### Run the visualisation and the plots
+
+Watch Idle, Greedy, both DQNs, PPO and MCTS on unseen scenarios, cycling automatically:
+
+```bat
+python -m evaluations.visualize --dqn runs/dqn_gate/final.pt runs/dqn_no_gate/final.pt --ppo runs/ppo_s0/best.pt --mcts --autoplay
+```
+
+Benchmark every policy on 8 identical unseen scenarios and save the tables and plots in `evaluations/results/<name>/`:
+
+```bat
+python -m evaluations.run_benchmark --dqn runs/dqn_gate/final.pt runs/dqn_no_gate/final.pt --ppo runs/ppo_s0/best.pt --mcts --scenarios 8
+```
