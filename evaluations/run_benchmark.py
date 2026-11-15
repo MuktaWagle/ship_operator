@@ -14,7 +14,7 @@ Outputs go to `evaluations/results/<name>/`:
 
 Command to run:
     python -m evaluations.run_benchmark \
-        --dqn runs/dqn_gate/best.pt runs/dqn_no_gate/best.pt \
+        --dqn runs/dqn_gate_mild/final.pt runs/dqn_nogate_mild/final.pt \
         --ppo runs/ppo_s0/best.pt \
         --mcts \
         --scenarios 8
