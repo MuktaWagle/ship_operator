@@ -1,0 +1,80 @@
+{
+  "idle": {
+    "episodes": 8,
+    "episode_wall_s_mean": 0.25421222387558373,
+    "episode_wall_s_std": 0.04419731736074958,
+    "episode_policy_s_mean": 2.0475474229897372e-05,
+    "episode_policy_s_std": 8.470439640110199e-06,
+    "decisions": 947,
+    "decision_ms_mean": 0.00017297127121349416,
+    "decision_ms_median": 0.00012500095181167126,
+    "decision_ms_p95": 0.00037500285543501377,
+    "decision_ms_max": 0.002749991836026311,
+    "total_s": 2.033731582996552
+  },
+  "greedy_highest_risk": {
+    "episodes": 8,
+    "episode_wall_s_mean": 0.28669888574950164,
+    "episode_wall_s_std": 0.0441210446107226,
+    "episode_policy_s_mean": 0.008530837254511425,
+    "episode_policy_s_std": 0.0010330239627767525,
+    "decisions": 952,
+    "decision_ms_mean": 0.07168770802110441,
+    "decision_ms_median": 0.0012500095181167126,
+    "decision_ms_p95": 0.765124997269595,
+    "decision_ms_max": 1.22808400192298,
+    "total_s": 2.2936244580050698
+  },
+  "dqn:dqn_gate_mild/final": {
+    "episodes": 8,
+    "episode_wall_s_mean": 1.5444904217474686,
+    "episode_wall_s_std": 0.2571376473230398,
+    "episode_policy_s_mean": 1.288794553353,
+    "episode_policy_s_std": 0.2238196679930043,
+    "decisions": 953,
+    "decision_ms_mean": 10.818842000864638,
+    "decision_ms_median": 8.84987499739509,
+    "decision_ms_p95": 36.348833594820455,
+    "decision_ms_max": 53.332833005697466,
+    "total_s": 12.35596099999384
+  },
+  "dqn:dqn_nogate_mild/final": {
+    "episodes": 8,
+    "episode_wall_s_mean": 0.3059371200033638,
+    "episode_wall_s_std": 0.0625497042294695,
+    "episode_policy_s_mean": 0.039763500113622285,
+    "episode_policy_s_std": 0.008544763067344594,
+    "decisions": 947,
+    "decision_ms_mean": 0.33591129979828754,
+    "decision_ms_median": 0.2512499922886491,
+    "decision_ms_p95": 0.906208207015879,
+    "decision_ms_max": 3.5282919998280704,
+    "total_s": 2.4475355409958865
+  },
+  "ppo:ppo_s0/best": {
+    "episodes": 8,
+    "episode_wall_s_mean": 0.29524197387763707,
+    "episode_wall_s_std": 0.046029785969596906,
+    "episode_policy_s_mean": 0.0315025368345232,
+    "episode_policy_s_std": 0.0069537404385789136,
+    "decisions": 964,
+    "decision_ms_mean": 0.2614318409504,
+    "decision_ms_median": 0.15495799016207457,
+    "decision_ms_p95": 0.8512812091794328,
+    "decision_ms_max": 6.92291599989403,
+    "total_s": 2.3619695419911295
+  },
+  "mcts": {
+    "episodes": 8,
+    "episode_wall_s_mean": 46.905385604248295,
+    "episode_wall_s_std": 14.36209530342058,
+    "episode_policy_s_mean": 46.61740377913338,
+    "episode_policy_s_std": 14.373873862980052,
+    "decisions": 954,
+    "decision_ms_mean": 390.9216249822506,
+    "decision_ms_median": 0.09514599514659494,
+    "decision_ms_p95": 1837.5341352002554,
+    "decision_ms_max": 2429.0175829955842,
+    "total_s": 375.2439789170021
+  }
+}

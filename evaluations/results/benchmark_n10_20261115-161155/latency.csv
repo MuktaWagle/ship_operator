@@ -1,0 +1,49 @@
+policy,display_name,scenario_seed,episode_wall_s,episode_policy_s
+idle,Idle,20000,0.287724,0.000023
+idle,Idle,20001,0.234146,0.000029
+idle,Idle,20002,0.303177,0.000014
+idle,Idle,20003,0.303808,0.000035
+idle,Idle,20004,0.248312,0.000015
+idle,Idle,20005,0.179207,0.000011
+idle,Idle,20006,0.262606,0.000022
+idle,Idle,20007,0.214718,0.000014
+greedy_highest_risk,Greedy Highest Risk,20000,0.311088,0.009393
+greedy_highest_risk,Greedy Highest Risk,20001,0.230447,0.006910
+greedy_highest_risk,Greedy Highest Risk,20002,0.363671,0.010124
+greedy_highest_risk,Greedy Highest Risk,20003,0.289035,0.009105
+greedy_highest_risk,Greedy Highest Risk,20004,0.298432,0.008372
+greedy_highest_risk,Greedy Highest Risk,20005,0.225676,0.007873
+greedy_highest_risk,Greedy Highest Risk,20006,0.293710,0.008781
+greedy_highest_risk,Greedy Highest Risk,20007,0.281531,0.007689
+dqn:dqn_gate_mild/final,DQN_gate,20000,1.616422,1.339673
+dqn:dqn_gate_mild/final,DQN_gate,20001,1.038891,0.844453
+dqn:dqn_gate_mild/final,DQN_gate,20002,1.962079,1.637058
+dqn:dqn_gate_mild/final,DQN_gate,20003,1.475733,1.215955
+dqn:dqn_gate_mild/final,DQN_gate,20004,1.526547,1.254385
+dqn:dqn_gate_mild/final,DQN_gate,20005,1.511404,1.315633
+dqn:dqn_gate_mild/final,DQN_gate,20006,1.690779,1.436015
+dqn:dqn_gate_mild/final,DQN_gate,20007,1.534068,1.267185
+dqn:dqn_nogate_mild/final,DQN_no_gate,20000,0.303639,0.041521
+dqn:dqn_nogate_mild/final,DQN_no_gate,20001,0.225924,0.031069
+dqn:dqn_nogate_mild/final,DQN_no_gate,20002,0.360791,0.050965
+dqn:dqn_nogate_mild/final,DQN_no_gate,20003,0.406807,0.054051
+dqn:dqn_nogate_mild/final,DQN_no_gate,20004,0.331336,0.038552
+dqn:dqn_nogate_mild/final,DQN_no_gate,20005,0.235002,0.033169
+dqn:dqn_nogate_mild/final,DQN_no_gate,20006,0.321418,0.034179
+dqn:dqn_nogate_mild/final,DQN_no_gate,20007,0.262581,0.034602
+ppo:ppo_s0/best,PPO,20000,0.323934,0.037656
+ppo:ppo_s0/best,PPO,20001,0.237369,0.022199
+ppo:ppo_s0/best,PPO,20002,0.378643,0.043436
+ppo:ppo_s0/best,PPO,20003,0.293264,0.030908
+ppo:ppo_s0/best,PPO,20004,0.308055,0.033454
+ppo:ppo_s0/best,PPO,20005,0.242942,0.024272
+ppo:ppo_s0/best,PPO,20006,0.307814,0.032390
+ppo:ppo_s0/best,PPO,20007,0.269914,0.027705
+mcts,MCTS,20000,39.805517,39.509808
+mcts,MCTS,20001,32.694298,32.480073
+mcts,MCTS,20002,38.852815,38.480002
+mcts,MCTS,20003,53.680204,53.381622
+mcts,MCTS,20004,57.655131,57.355862
+mcts,MCTS,20005,75.388759,75.158040
+mcts,MCTS,20006,41.358560,41.046186
+mcts,MCTS,20007,35.807801,35.527638
