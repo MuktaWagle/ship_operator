@@ -6,11 +6,6 @@ Policies:
     dqn, ppo                                  (one or more checkpoints each)
     mcts                                      (simulator-based planning, optional)
 
-Every checkpoint is plotted as its own series, so a DQN trained with the benefit
-gate ("DQN_gate") and one trained without it ("DQN_no_gate") show up side by side
-instead of being averaged into a single "dqn" bar. Plots use only the labels
-PPO, DQN_gate and DQN_no_gate, never the run/folder names.
-
 Outputs go to `evaluations/results/<name>/`:
     summary.json, summary.md, summary_by_checkpoint.md, episodes.csv,
     paired_vs_idle.json, latency.csv, latency.json and the plots
@@ -73,8 +68,7 @@ POLICY_DISPLAY_NAMES = {
     "greedy_highest_risk": "Greedy Highest Risk",
     "mcts": "MCTS",
 }
-# One fixed colour per kind of policy, navy and orange interleaved so that
-# neighbouring bars never share a hue family (checked for colour-blind separation).
+
 POLICY_COLOURS = {
     "idle": "#9AA6B6",
     "greedy_highest_risk": "#F2C14E",
@@ -83,9 +77,9 @@ POLICY_COLOURS = {
     "ppo": "#4C7CC4",
     "mcts": "#A8380A",
 }
-# Used only when a kind appears more than once (e.g. two PPO checkpoints).
+
 EXTRA_COLOURS = ["#2E5EAA", "#F5A04A", "#0F2A55", "#C95A10", "#7FA3D1", "#FFB870"]
-# Policies left out of the latency plot (idle makes no decisions worth timing).
+
 LATENCY_EXCLUDE = {"idle"}
 
 
@@ -115,7 +109,7 @@ def parse_args(argv=None):
     p.add_argument("--split", choices=("train", "val", "test"), default=None,
                    help="default: test for fleets of <= 4 ships, else unseen train combinations")
     p.add_argument("--name", default=None, help="results folder name")
-    # used only when no checkpoint supplies an environment config
+    
     p.add_argument("--fleet-size", type=int, default=10)
     p.add_argument("--min-start-distance", type=float, default=800.0)
     p.add_argument("--maneuver", choices=("right", "left", "stop"), default="right")
@@ -137,7 +131,7 @@ def parse_args(argv=None):
 
 
 def load_checkpoints(args):
-    """Return list of (label, group, agent, extra) for every checkpoint."""
+    
     loaded = []
     for path in args.dqn:
         agent = MaskedDQNAgent.load(path)
@@ -182,7 +176,7 @@ def base_env_config(args, loaded):
 
 # ----------------------------------------------------------------------------- naming
 def checkpoint_kind(group, extra):
-    """'dqn_gate' / 'dqn_no_gate' for DQN (gate = checkpoint has `benefit`), else the group."""
+    
     if group == "dqn":
         return "dqn_gate" if (extra or {}).get("benefit") else "dqn_no_gate"
     return group
@@ -192,10 +186,7 @@ CHECKPOINT_LABELS = {"dqn_gate": "DQN_gate", "dqn_no_gate": "DQN_no_gate", "ppo"
 
 
 def checkpoint_display_names(loaded):
-    """Plot labels for loaded checkpoints: PPO, DQN_gate or DQN_no_gate (no run names).
-
-    If the same kind is loaded more than once, later ones get a number: PPO, PPO 2, ...
-    """
+    
     names, seen = {}, {}
     for label, group, _, extra in loaded:
         kind = checkpoint_kind(group, extra)
@@ -206,7 +197,7 @@ def checkpoint_display_names(loaded):
 
 
 def build_series(policies, loaded):
-    """label -> {'name', 'colour', 'group', 'kind'} for every policy, in run order."""
+    
     ckpt_names = checkpoint_display_names(loaded)
     ckpt_kinds = {label: checkpoint_kind(group, extra) for label, group, _, extra in loaded}
     used, extra_colours, series = set(), iter(EXTRA_COLOURS), {}
@@ -225,7 +216,7 @@ def build_series(policies, loaded):
 
 # ----------------------------------------------------------------------------- timing
 class TimedPolicy:
-    """Wraps a policy and records the wall-clock time of every decision."""
+    
 
     def __init__(self, policy):
         self.policy = policy
@@ -336,7 +327,7 @@ def _rc():
 
 
 def _header(fig, title, subtitle=None):
-    """Left-aligned title, muted subtitle and an orange accent rule; returns free top fraction."""
+    
     from matplotlib.lines import Line2D
     h = fig.get_figheight()
     fig.text(0.012, 1 - 0.20 / h, title, ha="left", va="top", fontsize=16, fontweight="bold", color=NAVY)
@@ -349,7 +340,7 @@ def _header(fig, title, subtitle=None):
 
 
 def _legend(fig, names, colours, top):
-    """One shared legend row under the header; returns the new free top fraction."""
+    
     from matplotlib.patches import Patch
     h = fig.get_figheight()
     handles = [Patch(facecolor=c, edgecolor="white", label=n) for n, c in zip(names, colours)]
@@ -410,7 +401,7 @@ def save_plots(rows_by_label, summaries, paired, latency, series, out_dir):
         return float(summaries[label].get(f"{key}_{part}", np.nan))
 
     with plt.rc_context(_rc()):
-        # 1. Key metrics, mean +/- episode SD -------------------------------------------
+        
         metrics = [
             ("reward", "Reward", True),
             ("collision_events", "Collision events", False),
@@ -450,12 +441,12 @@ def save_plots(rows_by_label, summaries, paired, latency, series, out_dir):
             ax.grid(axis="x", visible=False)
             ax.margins(y=0.18)
             if len(finite) and np.allclose(means[finite], 0) and np.allclose(stds, 0):
-                ax.set_ylim(-0.05, 1)  # all zero: keep a sensible 0..1 axis
+                ax.set_ylim(-0.05, 1)  
         fig.tight_layout(rect=(0, 0, 1, top), h_pad=2.2, w_pad=2.0)
         fig.savefig(out_dir / "comparison.png", dpi=170)
         plt.close(fig)
 
-        # 2. Reward per scenario ----------------------------------------------------------
+        # Reward per scenario ----------------------------------------------------------
         seeds = sorted({r["scenario_seed"] for l in labels for r in rows_by_label[l]})
         matrix = np.full((len(labels), len(seeds)), np.nan)
         for i, label in enumerate(labels):
@@ -498,7 +489,7 @@ def save_plots(rows_by_label, summaries, paired, latency, series, out_dir):
         fig.savefig(out_dir / "scenario_reward_heatmap.png", dpi=170)
         plt.close(fig)
 
-        # 3. Paired gain versus idle ------------------------------------------------------
+        # Paired gain versus idle ------------------------------------------------------
         paired_labels = [l for l in labels if l in paired]
         if paired_labels:
             means = np.array([paired[l]["gain_mean"] for l in paired_labels])
@@ -526,7 +517,7 @@ def save_plots(rows_by_label, summaries, paired, latency, series, out_dir):
             fig.savefig(out_dir / "paired_reward_gain.png", dpi=170)
             plt.close(fig)
 
-        # 4. Safety / productivity trade-off ---------------------------------------------
+        # Safety-productivity trade-off ---------------------------------------------
         fig, ax = plt.subplots(figsize=(10.5, 7.2))
         top = _header(fig, "Safety versus mission completion",
                       "Mean per episode · whiskers show ± standard error of the mean · top-left is best")
@@ -544,8 +535,7 @@ def save_plots(rows_by_label, summaries, paired, latency, series, out_dir):
                         elinewidth=1.6, capsize=4, zorder=2)
             ax.scatter(risk, comp, s=230, color=c, edgecolor="white", linewidth=2.2, zorder=4)
             pts.append((risk, comp, series[label]["name"], c))
-        # Greedy label placement: each label takes the corner (NE/SE/NW/SW) farthest from
-        # the other points and from labels already placed, so close points don't collide.
+        
         xs = np.array([q[0] for q in pts], dtype=float)
         ys = np.array([q[1] for q in pts], dtype=float)
         xr = (np.nanmax(xs) - np.nanmin(xs)) or 1.0
@@ -575,7 +565,7 @@ def save_plots(rows_by_label, summaries, paired, latency, series, out_dir):
         fig.savefig(out_dir / "safety_vs_completion.png", dpi=170)
         plt.close(fig)
 
-        # 5. Latency to complete the simulation ------------------------------------------
+        # Latency to complete the simulation ------------------------------------------
         lat_labels = [l for l in labels if l in latency and series[l]["group"] not in LATENCY_EXCLUDE]
         if lat_labels:
             summ = {l: latency_summary(latency[l]) for l in lat_labels}
@@ -673,7 +663,7 @@ def main(argv=None):
     eval_sets = [sorted(e.ship_set) for e in eval_envs]
     eval_seeds = [e.scenario_seed for e in eval_envs]
 
-    policies = {}  # label -> (group, policy)
+    policies = {}  
     baselines = make_baselines()
     chosen = args.baselines
     for name in chosen:
@@ -705,7 +695,7 @@ def main(argv=None):
             lat = {"episode_wall_s": [], "episode_policy_s": [], "decision_ms": [], "total_s": 0.0}
             results = []
             t0 = time.perf_counter()
-            # One scenario at a time so every episode gets its own wall-clock time.
+            
             for env in eval_envs:
                 first_call = len(timed.latencies)
                 e0 = time.perf_counter()
