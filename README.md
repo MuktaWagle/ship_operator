@@ -433,11 +433,11 @@ Useful flags: `--scenarios` (default 4), `--speed` (3 steps/s), `--start-policy 
 Watch Idle, Greedy, both DQNs, PPO and MCTS on unseen scenarios, cycling automatically:
 
 ```bat
-python -m evaluations.visualize --dqn runs/dqn_gate/final.pt runs/dqn_no_gate/final.pt --ppo runs/ppo_s0/best.pt --mcts --autoplay
+python -m evaluations.visualize --dqn runs/dqn_gate/final.pt runs/dqn_no_gate/final.pt --ppo runs/ppo_vo_mixed2/best.pt --mcts --autoplay
 ```
 
 Benchmark every policy on 8 identical unseen scenarios and save the tables and plots in `evaluations/results/<name>/`:
 
 ```bat
-python -m evaluations.run_benchmark --dqn runs/dqn_gate/final.pt runs/dqn_no_gate/final.pt --ppo runs/ppo_s0/best.pt --mcts --scenarios 8
+python -m evaluations.run_benchmark --dqn runs/dqn_gate/final.pt runs/dqn_no_gate/final.pt --ppo runs/ppo_vo_mixed2/best.pt --mcts --scenarios 8
 ```
